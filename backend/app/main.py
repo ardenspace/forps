@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.api.v1.router import api_v1_router
 
 app = FastAPI(
     title="for-ps API",
@@ -29,9 +30,4 @@ async def health():
     return {"status": "ok"}
 
 
-# TODO: Add routers
-# from app.api import auth, workspaces, projects, tasks
-# app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-# app.include_router(workspaces.router, prefix="/api/workspaces", tags=["workspaces"])
-# app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-# app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(api_v1_router, prefix="/api/v1")
