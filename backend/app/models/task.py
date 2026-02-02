@@ -2,9 +2,8 @@ import uuid
 from datetime import datetime
 import enum
 
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy import ForeignKey, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -19,41 +18,41 @@ class TaskStatus(str, enum.Enum):
 class Task(Base):
     __tablename__ = "tasks"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
 
-    title = Column(String, nullable=False)
-    description = Column(Text, nullable=True)
-    status = Column(SQLEnum(TaskStatus), nullable=False, default=TaskStatus.TODO)
+    title: Mapped[str]
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[TaskStatus] = mapped_column(default=TaskStatus.TODO)
 
-    assignee_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    reporter_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    assignee_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    reporter_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
-    due_date = Column(DateTime, nullable=True)
+    due_date: Mapped[datetime | None]
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    project = relationship("Project", back_populates="tasks")
-    assignee = relationship("User", foreign_keys=[assignee_id], back_populates="assigned_tasks")
-    reporter = relationship("User", foreign_keys=[reporter_id], back_populates="reported_tasks")
-    comments = relationship("Comment", back_populates="task", cascade="all, delete-orphan")
-    events = relationship("TaskEvent", back_populates="task", cascade="all, delete-orphan")
+    project: Mapped["Project"] = relationship(back_populates="tasks")
+    assignee: Mapped["User | None"] = relationship(foreign_keys=[assignee_id], back_populates="assigned_tasks")
+    reporter: Mapped["User | None"] = relationship(foreign_keys=[reporter_id], back_populates="reported_tasks")
+    comments: Mapped[list["Comment"]] = relationship(back_populates="task", cascade="all, delete-orphan")
+    events: Mapped[list["TaskEvent"]] = relationship(back_populates="task", cascade="all, delete-orphan")
 
 
 class Comment(Base):
     __tablename__ = "comments"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
 
-    content = Column(Text, nullable=False)
+    content: Mapped[str] = mapped_column(Text)
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    task = relationship("Task", back_populates="comments")
-    user = relationship("User", back_populates="comments")
+    task: Mapped["Task"] = relationship(back_populates="comments")
+    user: Mapped["User"] = relationship(back_populates="comments")

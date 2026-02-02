@@ -2,31 +2,30 @@ import uuid
 from datetime import datetime
 import enum
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean, Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
 
 class ShareLinkScope(str, enum.Enum):
-    PROJECT_READ = "project_read"  # 프로젝트 전체 읽기
-    TASK_READ = "task_read"  # 특정 태스크만 읽기
+    PROJECT_READ = "project_read"
+    TASK_READ = "task_read"
 
 
 class ShareLink(Base):
     __tablename__ = "share_links"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
 
-    token = Column(String, unique=True, nullable=False, index=True)
-    scope = Column(SQLEnum(ShareLinkScope), nullable=False, default=ShareLinkScope.PROJECT_READ)
+    token: Mapped[str] = mapped_column(String, unique=True, index=True)
+    scope: Mapped[ShareLinkScope] = mapped_column(default=ShareLinkScope.PROJECT_READ)
 
-    is_active = Column(Boolean, default=True, nullable=False)
-    expires_at = Column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    expires_at: Mapped[datetime | None]
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     # Relationships
-    project = relationship("Project", back_populates="share_links")
+    project: Mapped["Project"] = relationship(back_populates="share_links")
