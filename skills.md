@@ -34,10 +34,13 @@ B2B Task Management & Collaboration Tool - AI 개발 가이드
 - **React** 19 - UI 라이브러리
 - **TypeScript** 5+ - 타입 안전성
 - **Vite** - 빌드 도구
+- **Bun** - 패키지 매니저
 - **Tailwind CSS** - 스타일링
 - **shadcn/ui** - UI 컴포넌트 (재사용)
-- **TanStack Query** - 서버 상태 관리 (예정)
-- **Zustand** - 클라이언트 상태 관리 (예정)
+- **React Router** v7 - 라우팅
+- **TanStack Query** - 서버 상태 관리
+- **Zustand** - 클라이언트 상태 관리 (인증 등)
+- **Axios** - HTTP 클라이언트
 
 ---
 
@@ -153,28 +156,33 @@ frontend/src/
 ├── components/
 │   ├── ui/              # shadcn/ui 컴포넌트
 │   ├── common/          # 공통 재사용 컴포넌트
-│   │   ├── Button.tsx
-│   │   ├── Card.tsx
-│   │   └── Modal.tsx
+│   │   └── ProtectedRoute.tsx
 │   └── features/        # 도메인별 컴포넌트
 │       ├── tasks/
 │       └── projects/
 ├── pages/               # 페이지 컴포넌트
+│   ├── LoginPage.tsx
+│   ├── RegisterPage.tsx
+│   └── DashboardPage.tsx
 ├── hooks/               # 커스텀 훅 (재사용)
 │   ├── useWeekTasks.ts
 │   └── useAuth.ts
+├── stores/              # Zustand 상태 관리
+│   └── authStore.ts
 ├── services/            # API 클라이언트
 │   └── api.ts
 ├── types/               # 공통 타입 정의
-│   ├── task.ts
-│   └── project.ts
+│   ├── user.ts
+│   ├── auth.ts
+│   └── task.ts
 ├── utils/               # 유틸리티 함수
 │   ├── date.ts
 │   └── format.ts
 ├── constants/           # 상수
-│   └── routes.ts
+│   ├── routes.ts
+│   └── taskStatus.ts
 └── lib/                 # 외부 라이브러리 설정
-    └── cn.ts
+    └── utils.ts
 ```
 
 ### 컴포넌트 작성 규칙
