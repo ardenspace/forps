@@ -151,10 +151,11 @@ for-ps는 팀(워크스페이스)에서 태스크를 등록하고, Kanban 보드
 
 표준 응답/에러 포맷은 프로젝트 규칙(예: {data, message} / {detail, code})을 따른다.
 
-## 12. Open Questions(결정 필요)
-- ShareLink 만료 정책: 없음 vs 30일 고정 vs 옵션 제공
-- Editor가 공유 링크 생성 가능 여부(Owner만 허용할지)
-- Week 뷰의 범위 판단: due_date만 기준 vs created/updated 포함
-- “Blocked”의 해제 규칙/표시(단순 상태로만 둘지)
+## 12. Open Questions(결정 완료)
 
-(결정되면 DECISIONS.md에 기록하고 여기서는 삭제/갱신)
+모든 Open Questions가 해결되었습니다. 결정 내용은 DECISIONS.md를 참조하세요.
+
+- ~~ShareLink 만료 정책~~ → 30일 고정 + 수동 철회
+- ~~Editor 공유 권한~~ → Owner만 생성/철회 가능
+- ~~Week 뷰 범위~~ → due_date 기준 + "마감일 미지정" 그룹
+- ~~Blocked 해제 규칙~~ → 단순 상태 (자유 변경)
