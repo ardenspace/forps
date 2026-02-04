@@ -119,7 +119,88 @@ git commit -m "feat: add created_by field to ShareLink model"
 
 ---
 
-### Task 1.3: Permission Service 구현
+### Task 1.3: 회원가입 시 Workspace 자동 생성
+
+**Files:**
+- Modify: `backend/app/services/auth_service.py`
+
+**Step 1: auth_service.register() 수정**
+
+회원가입 시 Workspace + WorkspaceMember를 자동 생성하도록 수정:
+
+```python
+# backend/app/services/auth_service.py
+from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
+
+async def register(db: AsyncSession, data: RegisterRequest) -> AuthResponse:
+    # 1. 기존 사용자 중복 체크
+    existing = await db.execute(
+        select(User).where(User.email == data.email)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Email already exists")
+
+    # 2. 사용자 생성
+    hashed_password = get_password_hash(data.password)
+    user = User(
+        email=data.email,
+        name=data.name,
+        password_hash=hashed_password,
+    )
+    db.add(user)
+    await db.flush()
+
+    # 3. 기본 Workspace 자동 생성
+    workspace = Workspace(
+        name=f"{data.name}의 워크스페이스",
+        slug=f"ws-{user.id.hex[:8]}",  # 유니크 slug
+        description=None,
+    )
+    db.add(workspace)
+    await db.flush()
+
+    # 4. 사용자를 Workspace Owner로 추가
+    member = WorkspaceMember(
+        workspace_id=workspace.id,
+        user_id=user.id,
+        role=WorkspaceRole.OWNER,
+    )
+    db.add(member)
+
+    await db.commit()
+    await db.refresh(user)
+
+    # 5. 토큰 생성 및 반환
+    token = create_access_token(data={"sub": str(user.id)})
+    return AuthResponse(
+        token=TokenResponse(access_token=token),
+        user=UserResponse.model_validate(user),
+    )
+```
+
+**Step 2: 테스트**
+
+```bash
+# 서버 실행 후 회원가입 테스트
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","name":"테스트","password":"test1234"}'
+
+# 워크스페이스 목록 확인
+curl http://localhost:8000/api/v1/workspaces \
+  -H "Authorization: Bearer {token}"
+```
+
+**Step 3: 커밋**
+
+```bash
+git add backend/app/services/auth_service.py
+git commit -m "feat: auto-create workspace on user registration"
+```
+
+---
+
+### Task 1.4: Permission Service 구현
 
 **Files:**
 - Create: `backend/app/services/permission_service.py`
@@ -254,7 +335,7 @@ git commit -m "feat: implement permission service with role inheritance"
 
 ---
 
-### Task 1.4: Workspace API 구현
+### Task 1.5: Workspace API 구현
 
 **Files:**
 - Create: `backend/app/schemas/workspace.py`
@@ -473,7 +554,7 @@ git commit -m "feat: implement workspace API (list, create, get)"
 
 ---
 
-### Task 1.5: Project API 구현
+### Task 1.6: Project API 구현
 
 **Files:**
 - Create: `backend/app/schemas/project.py`
@@ -666,7 +747,7 @@ git commit -m "feat: implement project API (list, create, get)"
 
 ---
 
-### Task 1.6: Tasks API 리팩토링 (중첩 리소스)
+### Task 1.7: Tasks API 리팩토링 (중첩 리소스)
 
 **Files:**
 - Modify: `backend/app/api/v1/endpoints/tasks.py`
@@ -752,7 +833,7 @@ git commit -m "refactor: migrate tasks API to nested resource structure"
 
 ---
 
-### Task 1.7: TaskEvent 자동 기록
+### Task 1.8: TaskEvent 자동 기록
 
 **Files:**
 - Create: `backend/app/services/task_event_service.py`
