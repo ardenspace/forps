@@ -107,3 +107,39 @@
 - 영향:
   - Workspace = 팀 단위, Project = 작업 단위.
   - 팀원 초대는 Workspace 레벨에서 한번만 하면 모든 Project 접근 가능.
+
+### 2026-02-05 — ShareLink.expires_at은 NOT NULL
+- 결정: expires_at 필드는 NOT NULL이며, 생성 시 항상 30일 후로 설정된다.
+- 이유: 무기한 링크 방지. "30일 고정 만료" 결정과 일관성.
+- 영향:
+  - DB 스키마에서 expires_at NOT NULL.
+  - 생성 API에서 자동으로 now() + 30일 설정.
+
+### 2026-02-05 — "내 태스크만" 필터: 서버 처리
+- 결정: "내 태스크만" 필터는 서버에서 처리한다.
+- 이유: 확장성. 태스크 수가 많아지면 클라이언트 필터는 비효율.
+- 영향:
+  - GET /projects/{id}/tasks에 mine_only 쿼리 파라미터.
+  - 서버에서 assignee_id = current_user.id 조건 적용.
+
+### 2026-02-05 — 태스크 삭제: MVP 포함 (Owner만)
+- 결정: 태스크 삭제 기능을 MVP에 포함한다. Owner만 삭제 가능.
+- 이유: 삭제 없이 운영은 비현실적.
+- 영향:
+  - DELETE /tasks/{id} API 구현.
+  - Editor는 삭제 불가, Owner만 가능.
+  - UI에서 Owner가 아니면 삭제 버튼 숨김.
+
+### 2026-02-05 — 프로젝트 생성자는 자동으로 Owner
+- 결정: 프로젝트 생성 시 생성자가 해당 프로젝트의 Owner가 된다.
+- 이유: 생성자가 관리 권한을 갖는 것이 자연스러움.
+- 영향:
+  - project_service.create()에서 ProjectMember(role=owner) 자동 생성.
+
+### 2026-02-05 — 멤버 초대/관리: MVP 포함
+- 결정: Owner가 Workspace에 멤버를 초대하는 기능을 MVP에 포함한다.
+- 이유: 팀 협업이 핵심 시나리오.
+- 영향:
+  - POST /workspaces/{id}/members API 구현 (Owner만).
+  - 초대 시 role 지정 가능 (owner/editor/viewer).
+  - 초대 UI 구현 필요.
