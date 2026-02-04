@@ -94,7 +94,7 @@ class ShareLink(Base):
     scope: Mapped[ShareLinkScope] = mapped_column(default=ShareLinkScope.PROJECT_READ)
 
     is_active: Mapped[bool] = mapped_column(default=True)
-    expires_at: Mapped[datetime | None]
+    expires_at: Mapped[datetime]  # NOT NULL - 항상 30일 후로 설정
 
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
@@ -622,6 +622,16 @@ async def create_project(
         description=data.description,
     )
     db.add(project)
+    await db.flush()
+
+    # 생성자를 Project Owner로 추가
+    member = ProjectMember(
+        project_id=project.id,
+        user_id=user_id,
+        role=WorkspaceRole.OWNER,
+    )
+    db.add(member)
+
     await db.commit()
     await db.refresh(project)
     return project
