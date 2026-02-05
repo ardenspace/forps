@@ -7,6 +7,12 @@ import type {
   Task,
   TaskCreate,
   TaskUpdate,
+  Workspace,
+  WorkspaceCreate,
+  WorkspaceMember,
+  AddMemberRequest,
+  Project,
+  ProjectCreate,
 } from '@/types';
 
 const apiClient = axios.create({
@@ -45,13 +51,35 @@ export const api = {
       apiClient.post<AuthResponse>('/auth/login', data),
     me: () => apiClient.get<User>('/auth/me'),
   },
+
+  workspaces: {
+    list: () => apiClient.get<Workspace[]>('/workspaces'),
+    create: (data: WorkspaceCreate) => apiClient.post<Workspace>('/workspaces', data),
+    get: (id: string) => apiClient.get<Workspace>(`/workspaces/${id}`),
+    getMembers: (id: string) => apiClient.get<WorkspaceMember[]>(`/workspaces/${id}/members`),
+    addMember: (id: string, data: AddMemberRequest) =>
+      apiClient.post<WorkspaceMember>(`/workspaces/${id}/members`, data),
+    removeMember: (workspaceId: string, userId: string) =>
+      apiClient.delete(`/workspaces/${workspaceId}/members/${userId}`),
+  },
+
+  projects: {
+    list: (workspaceId: string) =>
+      apiClient.get<Project[]>(`/workspaces/${workspaceId}/projects`),
+    create: (workspaceId: string, data: ProjectCreate) =>
+      apiClient.post<Project>(`/workspaces/${workspaceId}/projects`, data),
+    get: (id: string) => apiClient.get<Project>(`/projects/${id}`),
+  },
+
   tasks: {
+    list: (projectId: string, filters?: { mine_only?: boolean; status?: string }) =>
+      apiClient.get<Task[]>(`/projects/${projectId}/tasks`, { params: filters }),
     getWeek: (weekStart: string) =>
       apiClient.get<Task[]>('/tasks/week', { params: { week_start: weekStart } }),
     getById: (id: string) =>
       apiClient.get<Task>(`/tasks/${id}`),
     create: (projectId: string, data: TaskCreate) =>
-      apiClient.post<Task>(`/tasks/${projectId}`, data),
+      apiClient.post<Task>(`/projects/${projectId}/tasks`, data),
     update: (id: string, data: TaskUpdate) =>
       apiClient.put<Task>(`/tasks/${id}`, data),
     delete: (id: string) =>
