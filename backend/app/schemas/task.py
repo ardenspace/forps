@@ -53,3 +53,9 @@ class TaskResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TaskFilters(BaseModel):
+    status: TaskStatus | None = None
+    assignee_id: UUID | None = None
+    mine_only: bool = False
+
+
