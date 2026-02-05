@@ -15,8 +15,8 @@ router = APIRouter(tags=["projects"])
 @router.get("/workspaces/{workspace_id}/projects", response_model=list[ProjectResponse])
 async def list_projects(
     workspace_id: UUID,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """워크스페이스의 프로젝트 목록"""
     return await project_service.get_workspace_projects(db, workspace_id, user.id)
@@ -30,8 +30,8 @@ async def list_projects(
 async def create_project(
     workspace_id: UUID,
     data: ProjectCreate,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """프로젝트 생성 (editor 이상)"""
     # TODO: workspace 멤버 권한 체크
@@ -46,8 +46,8 @@ async def create_project(
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: UUID,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """프로젝트 상세"""
     project = await project_service.get_project(db, project_id)

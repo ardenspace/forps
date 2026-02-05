@@ -24,11 +24,11 @@ router = APIRouter(tags=["tasks"])
 @router.get("/projects/{project_id}/tasks", response_model=list[TaskResponse])
 async def list_project_tasks(
     project_id: UUID,
+    user: CurrentUser,
     status: TaskStatus | None = None,
     assignee_id: UUID | None = None,
     mine_only: bool = False,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """프로젝트의 태스크 목록 (Board용)"""
     role = await get_effective_role(db, user.id, project_id)
@@ -43,8 +43,8 @@ async def list_project_tasks(
 async def create_task(
     project_id: UUID,
     data: TaskCreate,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """태스크 생성 (editor 이상)"""
     role = await get_effective_role(db, user.id, project_id)
@@ -58,9 +58,9 @@ async def create_task(
 
 @router.get("/tasks/week", response_model=list[TaskResponse])
 async def get_week_tasks(
+    user: CurrentUser,
     week_start: date = Query(...),
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """주간 태스크 조회"""
     return await task_service.get_week_tasks(db, user.id, week_start)
@@ -69,8 +69,8 @@ async def get_week_tasks(
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
 async def get_task(
     task_id: UUID,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """태스크 상세"""
     task = await task_service.get_task(db, task_id)
@@ -83,8 +83,8 @@ async def get_task(
 async def update_task(
     task_id: UUID,
     data: TaskUpdate,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """태스크 수정 (editor 이상)"""
     task = await task_service.get_task(db, task_id)
@@ -101,8 +101,8 @@ async def update_task(
 @router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(
     task_id: UUID,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """태스크 삭제 (Owner만)"""
     task = await task_service.get_task(db, task_id)
@@ -114,5 +114,3 @@ async def delete_task(
         raise HTTPException(status_code=403, detail="Only owner can delete tasks")
 
     await task_service.delete_task(db, task_id, user.id)
-
-

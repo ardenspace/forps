@@ -18,8 +18,8 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 @router.get("", response_model=list[WorkspaceResponse])
 async def list_workspaces(
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """내 워크스페이스 목록"""
     return await workspace_service.get_user_workspaces(db, user.id)
@@ -28,8 +28,8 @@ async def list_workspaces(
 @router.post("", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
 async def create_workspace(
     data: WorkspaceCreate,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """워크스페이스 생성"""
     workspace = await workspace_service.create_workspace(db, user.id, data)
@@ -43,8 +43,8 @@ async def create_workspace(
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
 async def get_workspace(
     workspace_id: UUID,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """워크스페이스 상세"""
     workspace = await workspace_service.get_workspace(db, workspace_id)
@@ -59,8 +59,8 @@ async def get_workspace(
 @router.get("/{workspace_id}/members", response_model=list[WorkspaceMemberResponse])
 async def list_workspace_members(
     workspace_id: UUID,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """워크스페이스 멤버 목록"""
     membership = await workspace_service.get_user_membership(db, workspace_id, user.id)
@@ -74,8 +74,8 @@ async def list_workspace_members(
 async def add_workspace_member(
     workspace_id: UUID,
     data: AddMemberRequest,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """멤버 초대 (Owner만)"""
     my_membership = await workspace_service.get_user_membership(db, workspace_id, user.id)
@@ -93,8 +93,8 @@ async def add_workspace_member(
 async def remove_workspace_member(
     workspace_id: UUID,
     member_user_id: UUID,
+    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(),
 ):
     """멤버 제거 (Owner만)"""
     my_membership = await workspace_service.get_user_membership(db, workspace_id, user.id)
