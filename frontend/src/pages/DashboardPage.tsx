@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useWorkspaces } from '@/hooks/useWorkspaces';
+import { useWorkspaces, useWorkspaceMembers } from '@/hooks/useWorkspaces';
 import { useProjects } from '@/hooks/useProjects';
 import { useTasks, useDeleteTask, useWeekTasks } from '@/hooks/useTasks';
 import { useUIStore } from '@/stores/uiStore';
@@ -9,6 +9,7 @@ import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { BoardHeader } from '@/components/board/BoardHeader';
 import { CreateTaskModal } from '@/components/board/CreateTaskModal';
 import { TaskDetailModal } from '@/components/board/TaskDetailModal';
+import { CreateProjectModal } from '@/components/workspace/CreateProjectModal';
 import { WeekView, getMonday } from '@/components/week/WeekView';
 import type { Task } from '@/types/task';
 
@@ -26,6 +27,7 @@ export function DashboardPage() {
 
   const { data: workspaces } = useWorkspaces();
   const { data: projects } = useProjects(selectedWorkspaceId);
+  const { data: members } = useWorkspaceMembers(selectedWorkspaceId);
   const { data: tasks, isLoading } = useTasks(selectedProjectId, {
     mine_only: taskFilters.mineOnly,
   });
@@ -33,7 +35,8 @@ export function DashboardPage() {
 
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
-  const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+  const [isCreateTaskModalOpen, setCreateTaskModalOpen] = useState(false);
+  const [isCreateProjectModalOpen, setCreateProjectModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   // Week tasks (user's tasks across all projects)
@@ -93,16 +96,25 @@ export function DashboardPage() {
                   ))}
                 </select>
                 {selectedWorkspaceId && (
-                  <select
-                    value={selectedProjectId || ''}
-                    onChange={(e) => setSelectedProject(e.target.value || null)}
-                    className="border rounded px-2 py-1 text-sm"
-                  >
-                    <option value="">프로젝트 선택</option>
-                    {projects?.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      value={selectedProjectId || ''}
+                      onChange={(e) => setSelectedProject(e.target.value || null)}
+                      className="border rounded px-2 py-1 text-sm"
+                    >
+                      <option value="">프로젝트 선택</option>
+                      {projects?.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCreateProjectModalOpen(true)}
+                    >
+                      + 프로젝트
+                    </Button>
+                  </>
                 )}
               </>
             )}
@@ -132,7 +144,7 @@ export function DashboardPage() {
             <>
               <BoardHeader
                 projectName={selectedProject?.name || ''}
-                onCreateTask={() => setCreateModalOpen(true)}
+                onCreateTask={() => setCreateTaskModalOpen(true)}
               />
               <KanbanBoard
                 tasks={tasks || []}
@@ -159,17 +171,28 @@ export function DashboardPage() {
       </main>
 
       {/* Modals */}
-      {selectedProjectId && viewMode === 'board' && (
+      {selectedProjectId && viewMode === 'board' && user && (
         <CreateTaskModal
           projectId={selectedProjectId}
-          isOpen={isCreateModalOpen}
-          onClose={() => setCreateModalOpen(false)}
+          members={members || []}
+          currentUserId={user.id}
+          isOpen={isCreateTaskModalOpen}
+          onClose={() => setCreateTaskModalOpen(false)}
+        />
+      )}
+
+      {selectedWorkspaceId && (
+        <CreateProjectModal
+          workspaceId={selectedWorkspaceId}
+          isOpen={isCreateProjectModalOpen}
+          onClose={() => setCreateProjectModalOpen(false)}
         />
       )}
 
       <TaskDetailModal
         task={selectedTask}
         myRole={myRole}
+        members={members || []}
         isOpen={!!selectedTask}
         onClose={() => setSelectedTask(null)}
         onDelete={handleDeleteTask}

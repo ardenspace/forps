@@ -56,10 +56,15 @@ async def get_project_tasks(
 
 
 async def create_task(db: AsyncSession, project_id: UUID, user_id: UUID, data: TaskCreate) -> Task:
+    task_data = data.model_dump()
+    # 담당자 미지정 시 생성자를 기본 담당자로
+    if task_data.get("assignee_id") is None:
+        task_data["assignee_id"] = user_id
+
     task = Task(
         project_id=project_id,
         reporter_id=user_id,
-        **data.model_dump(),
+        **task_data,
     )
     db.add(task)
     await db.flush()
