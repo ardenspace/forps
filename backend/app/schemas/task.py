@@ -20,7 +20,7 @@ class TaskBase(BaseModel):
     title: str
     description: str | None = None
     status: TaskStatus = TaskStatus.TODO
-    due_date: datetime | None = None
+    due_date: date | None = None
     assignee_id: UUID | None = None
 
 
@@ -32,7 +32,7 @@ class TaskUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     status: TaskStatus | None = None
-    due_date: datetime | None = None
+    due_date: date | None = None
     assignee_id: UUID | None = None
 
 
@@ -42,7 +42,7 @@ class TaskResponse(BaseModel):
     title: str
     description: str | None
     status: TaskStatus
-    due_date: datetime | None
+    due_date: date | None
     assignee_id: UUID | None
     reporter_id: UUID | None
     created_at: datetime
@@ -51,5 +51,11 @@ class TaskResponse(BaseModel):
     reporter: UserBrief | None = None
 
     model_config = {"from_attributes": True}
+
+
+class TaskFilters(BaseModel):
+    status: TaskStatus | None = None
+    assignee_id: UUID | None = None
+    mine_only: bool = False
 
 

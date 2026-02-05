@@ -18,14 +18,16 @@ class ShareLink(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
 
     token: Mapped[str] = mapped_column(String, unique=True, index=True)
     scope: Mapped[ShareLinkScope] = mapped_column(default=ShareLinkScope.PROJECT_READ)
 
     is_active: Mapped[bool] = mapped_column(default=True)
-    expires_at: Mapped[datetime | None]
+    expires_at: Mapped[datetime]  # NOT NULL - 항상 30일 후로 설정
 
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     # Relationships
     project: Mapped["Project"] = relationship(back_populates="share_links")
+    creator: Mapped["User"] = relationship()

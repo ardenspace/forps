@@ -1,15 +1,124 @@
+import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useWorkspaces, useWorkspaceMembers } from '@/hooks/useWorkspaces';
+import { useProjects } from '@/hooks/useProjects';
+import { useTasks, useDeleteTask, useWeekTasks } from '@/hooks/useTasks';
+import { useUIStore } from '@/stores/uiStore';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { KanbanBoard } from '@/components/board/KanbanBoard';
+import { BoardHeader } from '@/components/board/BoardHeader';
+import { CreateTaskModal } from '@/components/board/CreateTaskModal';
+import { TaskDetailModal } from '@/components/board/TaskDetailModal';
+import { CreateProjectModal } from '@/components/workspace/CreateProjectModal';
+import { WeekView, getMonday } from '@/components/week/WeekView';
+import type { Task } from '@/types/task';
+
+type ViewMode = 'board' | 'week';
 
 export function DashboardPage() {
   const { user, logout } = useAuth();
+  const {
+    selectedWorkspaceId,
+    selectedProjectId,
+    setSelectedWorkspace,
+    setSelectedProject,
+    taskFilters,
+  } = useUIStore();
+
+  const { data: workspaces } = useWorkspaces();
+  const { data: projects } = useProjects(selectedWorkspaceId);
+  const { data: members } = useWorkspaceMembers(selectedWorkspaceId);
+  const { data: tasks, isLoading } = useTasks(selectedProjectId, {
+    mine_only: taskFilters.mineOnly,
+  });
+  const deleteTaskMutation = useDeleteTask();
+
+  const [viewMode, setViewMode] = useState<ViewMode>('board');
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
+  const [isCreateTaskModalOpen, setCreateTaskModalOpen] = useState(false);
+  const [isCreateProjectModalOpen, setCreateProjectModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // Week tasks (user's tasks across all projects)
+  const weekStartStr = weekStart.toISOString().split('T')[0];
+  const { data: weekTasks, isLoading: isWeekLoading } = useWeekTasks(
+    viewMode === 'week' ? weekStartStr : null
+  );
+
+  const selectedProject = projects?.find((p) => p.id === selectedProjectId);
+  const myRole = selectedProject?.my_role ?? 'viewer';
+
+  const handleDeleteTask = (taskId: string) => {
+    deleteTaskMutation.mutate(taskId);
+  };
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-foreground">for-ps</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-bold">for-ps</h1>
+            {/* View Mode Tabs */}
+            <div className="flex border rounded overflow-hidden">
+              <button
+                className={`px-3 py-1 text-sm ${
+                  viewMode === 'board'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background hover:bg-muted'
+                }`}
+                onClick={() => setViewMode('board')}
+              >
+                Board
+              </button>
+              <button
+                className={`px-3 py-1 text-sm ${
+                  viewMode === 'week'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background hover:bg-muted'
+                }`}
+                onClick={() => setViewMode('week')}
+              >
+                Week
+              </button>
+            </div>
+            {/* Workspace/Project selector (only for Board mode) */}
+            {viewMode === 'board' && (
+              <>
+                <select
+                  value={selectedWorkspaceId || ''}
+                  onChange={(e) => setSelectedWorkspace(e.target.value || null)}
+                  className="border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">워크스페이스 선택</option>
+                  {workspaces?.map((ws) => (
+                    <option key={ws.id} value={ws.id}>{ws.name}</option>
+                  ))}
+                </select>
+                {selectedWorkspaceId && (
+                  <>
+                    <select
+                      value={selectedProjectId || ''}
+                      onChange={(e) => setSelectedProject(e.target.value || null)}
+                      className="border rounded px-2 py-1 text-sm"
+                    >
+                      <option value="">프로젝트 선택</option>
+                      {projects?.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCreateProjectModalOpen(true)}
+                    >
+                      + 프로젝트
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">{user?.name}</span>
             <Button variant="ghost" size="sm" onClick={logout}>
@@ -19,59 +128,75 @@ export function DashboardPage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-2xl font-bold text-foreground">대시보드</h2>
-            <p className="text-muted-foreground mt-1">
-              환영합니다, {user?.name}님!
-            </p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">My Week</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">-</p>
-                <p className="text-xs text-muted-foreground">이번 주 태스크</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">-</p>
-                <p className="text-xs text-muted-foreground">진행 중인 태스크</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Completed</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">-</p>
-                <p className="text-xs text-muted-foreground">완료된 태스크</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>최근 태스크</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                아직 태스크가 없습니다. 프로젝트를 만들고 태스크를 추가해보세요.
+      {/* Main */}
+      <main className="container mx-auto px-4 py-6">
+        {viewMode === 'board' ? (
+          // Board View
+          !selectedProjectId ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">
+                워크스페이스와 프로젝트를 선택해주세요.
               </p>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          ) : isLoading ? (
+            <div className="text-center py-12">로딩 중...</div>
+          ) : (
+            <>
+              <BoardHeader
+                projectName={selectedProject?.name || ''}
+                onCreateTask={() => setCreateTaskModalOpen(true)}
+              />
+              <KanbanBoard
+                tasks={tasks || []}
+                onTaskClick={(task) => setSelectedTask(task)}
+              />
+            </>
+          )
+        ) : (
+          // Week View
+          isWeekLoading ? (
+            <div className="text-center py-12">로딩 중...</div>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold mb-4">내 주간 태스크</h2>
+              <WeekView
+                tasks={weekTasks || []}
+                weekStart={weekStart}
+                onWeekChange={setWeekStart}
+                onTaskClick={(task) => setSelectedTask(task)}
+              />
+            </>
+          )
+        )}
       </main>
+
+      {/* Modals */}
+      {selectedProjectId && viewMode === 'board' && user && (
+        <CreateTaskModal
+          projectId={selectedProjectId}
+          members={members || []}
+          currentUserId={user.id}
+          isOpen={isCreateTaskModalOpen}
+          onClose={() => setCreateTaskModalOpen(false)}
+        />
+      )}
+
+      {selectedWorkspaceId && (
+        <CreateProjectModal
+          workspaceId={selectedWorkspaceId}
+          isOpen={isCreateProjectModalOpen}
+          onClose={() => setCreateProjectModalOpen(false)}
+        />
+      )}
+
+      <TaskDetailModal
+        task={selectedTask}
+        myRole={myRole}
+        members={members || []}
+        isOpen={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
+        onDelete={handleDeleteTask}
+      />
     </div>
   );
 }
