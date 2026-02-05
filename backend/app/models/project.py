@@ -5,6 +5,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.workspace import WorkspaceRole
 
 
 class Project(Base):
@@ -32,6 +33,7 @@ class ProjectMember(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    role: Mapped[WorkspaceRole] = mapped_column(default=WorkspaceRole.VIEWER)
 
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
