@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/common/ProtectedRoute';
-import { LoginPage, RegisterPage, DashboardPage } from '@/pages';
+import { LoginPage, RegisterPage, DashboardPage, SharePage } from '@/pages';
 import { ROUTES } from '@/constants';
 
 function App() {
@@ -10,6 +10,7 @@ function App() {
         {/* Public routes */}
         <Route path={ROUTES.LOGIN} element={<LoginPage />} />
         <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
+        <Route path={ROUTES.SHARE} element={<SharePage />} />
 
         {/* Protected routes */}
         <Route element={<ProtectedRoute />}>

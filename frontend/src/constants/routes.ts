@@ -7,4 +7,5 @@ export const ROUTES = {
   TASK_DETAIL: '/tasks/:taskId',
   PROJECTS: '/projects',
   PROJECT_DETAIL: '/projects/:projectId',
+  SHARE: '/share/:token',
 } as const;
