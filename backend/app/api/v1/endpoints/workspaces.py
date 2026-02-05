@@ -52,3 +52,59 @@ async def get_workspace(
         raise HTTPException(status_code=404, detail="Workspace not found")
     # TODO: 멤버 여부 확인
     return workspace
+
+
+# ── Members ────────────────────────────────────────────────
+
+@router.get("/{workspace_id}/members", response_model=list[WorkspaceMemberResponse])
+async def list_workspace_members(
+    workspace_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(),
+):
+    """워크스페이스 멤버 목록"""
+    membership = await workspace_service.get_user_membership(db, workspace_id, user.id)
+    if not membership:
+        raise HTTPException(status_code=403, detail="Not a member of this workspace")
+
+    return await workspace_service.get_workspace_members(db, workspace_id)
+
+
+@router.post("/{workspace_id}/members", response_model=WorkspaceMemberResponse, status_code=status.HTTP_201_CREATED)
+async def add_workspace_member(
+    workspace_id: UUID,
+    data: AddMemberRequest,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(),
+):
+    """멤버 초대 (Owner만)"""
+    my_membership = await workspace_service.get_user_membership(db, workspace_id, user.id)
+    if not my_membership or my_membership.role != WorkspaceRole.OWNER:
+        raise HTTPException(status_code=403, detail="Only owner can add members")
+
+    member = await workspace_service.add_member(db, workspace_id, data.email, data.role)
+    if not member:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return member
+
+
+@router.delete("/{workspace_id}/members/{member_user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_workspace_member(
+    workspace_id: UUID,
+    member_user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(),
+):
+    """멤버 제거 (Owner만)"""
+    my_membership = await workspace_service.get_user_membership(db, workspace_id, user.id)
+    if not my_membership or my_membership.role != WorkspaceRole.OWNER:
+        raise HTTPException(status_code=403, detail="Only owner can remove members")
+
+    # 자기 자신 제거 방지
+    if member_user_id == user.id:
+        raise HTTPException(status_code=400, detail="Cannot remove yourself")
+
+    success = await workspace_service.remove_member(db, workspace_id, member_user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Member not found")
