@@ -153,7 +153,7 @@ async def register(db: AsyncSession, data: RegisterRequest) -> AuthResponse:
     # 3. 기본 Workspace 자동 생성
     workspace = Workspace(
         name=f"{data.name}의 워크스페이스",
-        slug=f"ws-{user.id.hex[:8]}",  # 유니크 slug
+        slug=f"ws-{user.id.hex}",  # 전체 UUID hex 사용 (충돌 방지)
         description=None,
     )
     db.add(workspace)
@@ -481,6 +481,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import CurrentUser
+from app.models.workspace import WorkspaceRole
 from app.schemas.workspace import (
     WorkspaceCreate,
     WorkspaceResponse,
@@ -496,7 +497,7 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 @router.get("", response_model=list[WorkspaceResponse])
 async def list_workspaces(
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = ...,
+    user: CurrentUser,
 ):
     """내 워크스페이스 목록"""
     return await workspace_service.get_user_workspaces(db, user.id)
@@ -506,13 +507,13 @@ async def list_workspaces(
 async def create_workspace(
     data: WorkspaceCreate,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = ...,
+    user: CurrentUser,
 ):
     """워크스페이스 생성"""
     workspace = await workspace_service.create_workspace(db, user.id, data)
     return {
         **workspace.__dict__,
-        "my_role": "owner",
+        "my_role": WorkspaceRole.OWNER,
         "member_count": 1,
     }
 
@@ -521,7 +522,7 @@ async def create_workspace(
 async def get_workspace(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = ...,
+    user: CurrentUser,
 ):
     """워크스페이스 상세"""
     workspace = await workspace_service.get_workspace(db, workspace_id)
@@ -681,6 +682,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import CurrentUser
+from app.models.workspace import WorkspaceRole
 from app.schemas.project import ProjectCreate, ProjectResponse
 from app.services import project_service
 from app.services.permission_service import get_effective_role, can_edit
@@ -692,7 +694,7 @@ router = APIRouter(tags=["projects"])
 async def list_projects(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = ...,
+    user: CurrentUser,
 ):
     """워크스페이스의 프로젝트 목록"""
     return await project_service.get_workspace_projects(db, workspace_id, user.id)
@@ -707,14 +709,14 @@ async def create_project(
     workspace_id: UUID,
     data: ProjectCreate,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = ...,
+    user: CurrentUser,
 ):
     """프로젝트 생성 (editor 이상)"""
     # TODO: workspace 멤버 권한 체크
     project = await project_service.create_project(db, workspace_id, user.id, data)
     return {
         **project.__dict__,
-        "my_role": "owner",  # 생성자는 workspace 권한 상속
+        "my_role": WorkspaceRole.OWNER,
         "task_count": 0,
     }
 
@@ -723,7 +725,7 @@ async def create_project(
 async def get_project(
     project_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = ...,
+    user: CurrentUser,
 ):
     """프로젝트 상세"""
     project = await project_service.get_project(db, project_id)
@@ -776,7 +778,18 @@ class TaskFilters(BaseModel):
     mine_only: bool = False
 ```
 
-**Step 2: Service 수정 - 프로젝트별 목록 조회**
+**Step 2: Service 수정 - 단일 태스크 조회 헬퍼**
+
+```python
+# backend/app/services/task_service.py 에 추가
+async def get_task(db: AsyncSession, task_id: UUID) -> Task | None:
+    """태스크 단일 조회"""
+    stmt = select(Task).where(Task.id == task_id)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+```
+
+**Step 3: Service 수정 - 프로젝트별 목록 조회**
 
 ```python
 # backend/app/services/task_service.py 에 추가
@@ -805,7 +818,7 @@ async def get_project_tasks(
     return result.scalars().all()
 ```
 
-**Step 3: API 엔드포인트 수정**
+**Step 4: API 엔드포인트 수정**
 
 ```python
 # backend/app/api/v1/endpoints/tasks.py
@@ -817,7 +830,7 @@ async def list_project_tasks(
     assignee_id: UUID | None = None,
     mine_only: bool = False,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = ...,
+    user: CurrentUser,
 ):
     """프로젝트의 태스크 목록 (Board용)"""
     from app.services.permission_service import get_effective_role
@@ -833,7 +846,7 @@ async def list_project_tasks(
 @router.post("/projects/{project_id}/tasks", ...)  # 기존 유지, path만 변경
 ```
 
-**Step 4: 커밋**
+**Step 5: 커밋**
 
 ```bash
 git add backend/app/api/v1/endpoints/tasks.py backend/app/services/task_service.py \
@@ -848,8 +861,20 @@ git commit -m "refactor: migrate tasks API to nested resource structure"
 **Files:**
 - Create: `backend/app/services/task_event_service.py`
 - Modify: `backend/app/services/task_service.py`
+- Modify: `backend/app/models/task_event.py` (DELETED enum 추가)
 
-**Step 1: TaskEvent Service 작성**
+**Step 1: TaskEventAction에 DELETED 추가**
+
+```python
+# backend/app/models/task_event.py
+class TaskEventAction(str, Enum):
+    CREATED = "created"
+    STATUS_CHANGED = "status_changed"
+    UPDATED = "updated"
+    DELETED = "deleted"  # 추가
+```
+
+**Step 2: TaskEvent Service 작성**
 
 ```python
 # backend/app/services/task_event_service.py
@@ -876,7 +901,7 @@ async def record_event(
     return event
 ```
 
-**Step 2: Task Service에 이벤트 기록 추가**
+**Step 3: Task Service에 이벤트 기록 추가**
 
 ```python
 # backend/app/services/task_service.py 수정
@@ -912,11 +937,248 @@ async def update_task(...):
     return task
 ```
 
+**Step 4: 커밋**
+
+```bash
+git add backend/app/models/task_event.py backend/app/services/task_event_service.py \
+        backend/app/services/task_service.py
+git commit -m "feat: auto-record TaskEvent on task creation and status change"
+```
+
+---
+
+### Task 1.9: Task 삭제 API 구현
+
+**Files:**
+- Modify: `backend/app/api/v1/endpoints/tasks.py`
+- Modify: `backend/app/services/task_service.py`
+
+**Step 1: Service에 삭제 함수 추가**
+
+```python
+# backend/app/services/task_service.py 에 추가
+
+async def delete_task(
+    db: AsyncSession,
+    task_id: UUID,
+    user_id: UUID,
+) -> bool:
+    """태스크 삭제 (Owner만 가능)"""
+    stmt = select(Task).where(Task.id == task_id)
+    result = await db.execute(stmt)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        return False
+
+    # TaskEvent 기록 (삭제 전)
+    await task_event_service.record_event(
+        db, task_id, user_id, TaskEventAction.DELETED
+    )
+
+    await db.delete(task)
+    await db.commit()
+    return True
+```
+
+**Step 2: API Endpoint 추가**
+
+```python
+# backend/app/api/v1/endpoints/tasks.py 에 추가
+
+@router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_task(
+    task_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser,
+):
+    """태스크 삭제 (Owner만)"""
+    from app.services.permission_service import get_effective_role, can_manage
+
+    # 태스크 조회하여 project_id 확인
+    task = await task_service.get_task(db, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    role = await get_effective_role(db, user.id, task.project_id)
+    if not can_manage(role):
+        raise HTTPException(status_code=403, detail="Only owner can delete tasks")
+
+    await task_service.delete_task(db, task_id, user.id)
+```
+
 **Step 3: 커밋**
 
 ```bash
-git add backend/app/services/task_event_service.py backend/app/services/task_service.py
-git commit -m "feat: auto-record TaskEvent on task creation and status change"
+git add backend/app/api/v1/endpoints/tasks.py backend/app/services/task_service.py
+git commit -m "feat: implement task delete API (owner only)"
+```
+
+---
+
+### Task 1.10: Workspace 멤버 초대 API 구현
+
+**Files:**
+- Modify: `backend/app/services/workspace_service.py`
+- Modify: `backend/app/api/v1/endpoints/workspaces.py`
+
+**Step 1: Service에 멤버 관련 함수 추가**
+
+```python
+# backend/app/services/workspace_service.py 에 추가
+
+async def get_user_membership(
+    db: AsyncSession,
+    workspace_id: UUID,
+    user_id: UUID,
+) -> WorkspaceMember | None:
+    """사용자의 워크스페이스 멤버십 조회 (권한 체크용)"""
+    stmt = select(WorkspaceMember).where(
+        WorkspaceMember.workspace_id == workspace_id,
+        WorkspaceMember.user_id == user_id
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def add_member(
+    db: AsyncSession,
+    workspace_id: UUID,
+    email: str,
+    role: WorkspaceRole,
+) -> WorkspaceMember | None:
+    """이메일로 사용자를 워크스페이스에 초대"""
+    # 사용자 조회
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        return None  # 사용자 없음
+
+    # 이미 멤버인지 확인
+    stmt = select(WorkspaceMember).where(
+        WorkspaceMember.workspace_id == workspace_id,
+        WorkspaceMember.user_id == user.id
+    )
+    result = await db.execute(stmt)
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        # 이미 멤버면 role 업데이트
+        existing.role = role
+        await db.commit()
+        return existing
+
+    # 새 멤버 추가
+    member = WorkspaceMember(
+        workspace_id=workspace_id,
+        user_id=user.id,
+        role=role,
+    )
+    db.add(member)
+    await db.commit()
+    await db.refresh(member)
+    return member
+
+
+async def get_workspace_members(
+    db: AsyncSession,
+    workspace_id: UUID,
+) -> list[WorkspaceMember]:
+    """워크스페이스 멤버 목록"""
+    stmt = (
+        select(WorkspaceMember)
+        .where(WorkspaceMember.workspace_id == workspace_id)
+        .options(selectinload(WorkspaceMember.user))
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+async def remove_member(
+    db: AsyncSession,
+    workspace_id: UUID,
+    user_id: UUID,
+) -> bool:
+    """워크스페이스에서 멤버 제거"""
+    stmt = select(WorkspaceMember).where(
+        WorkspaceMember.workspace_id == workspace_id,
+        WorkspaceMember.user_id == user_id
+    )
+    result = await db.execute(stmt)
+    member = result.scalar_one_or_none()
+
+    if not member:
+        return False
+
+    await db.delete(member)
+    await db.commit()
+    return True
+```
+
+**Step 2: API Endpoint 추가**
+
+```python
+# backend/app/api/v1/endpoints/workspaces.py 에 추가
+
+@router.get("/{workspace_id}/members", response_model=list[WorkspaceMemberResponse])
+async def list_workspace_members(
+    workspace_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser,
+):
+    """워크스페이스 멤버 목록"""
+    # TODO: 멤버 여부 확인
+    return await workspace_service.get_workspace_members(db, workspace_id)
+
+
+@router.post("/{workspace_id}/members", response_model=WorkspaceMemberResponse, status_code=status.HTTP_201_CREATED)
+async def add_workspace_member(
+    workspace_id: UUID,
+    data: AddMemberRequest,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser,
+):
+    """멤버 초대 (Owner만)"""
+    # 권한 확인
+    my_membership = await workspace_service.get_user_membership(db, workspace_id, user.id)
+    if not my_membership or my_membership.role != WorkspaceRole.OWNER:
+        raise HTTPException(status_code=403, detail="Only owner can add members")
+
+    member = await workspace_service.add_member(db, workspace_id, data.email, data.role)
+    if not member:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return member
+
+
+@router.delete("/{workspace_id}/members/{member_user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_workspace_member(
+    workspace_id: UUID,
+    member_user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser,
+):
+    """멤버 제거 (Owner만)"""
+    my_membership = await workspace_service.get_user_membership(db, workspace_id, user.id)
+    if not my_membership or my_membership.role != WorkspaceRole.OWNER:
+        raise HTTPException(status_code=403, detail="Only owner can remove members")
+
+    # 자기 자신 제거 방지
+    if member_user_id == user.id:
+        raise HTTPException(status_code=400, detail="Cannot remove yourself")
+
+    success = await workspace_service.remove_member(db, workspace_id, member_user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Member not found")
+```
+
+**Step 3: 커밋**
+
+```bash
+git add backend/app/services/workspace_service.py backend/app/api/v1/endpoints/workspaces.py
+git commit -m "feat: implement workspace member management API (owner only)"
 ```
 
 ---
@@ -1350,6 +1612,7 @@ git commit -m "feat: implement Kanban board components (Board, Column, Card)"
 - Modify: `frontend/src/pages/DashboardPage.tsx`
 - Create: `frontend/src/components/board/BoardHeader.tsx`
 - Create: `frontend/src/components/board/CreateTaskModal.tsx`
+- Create: `frontend/src/components/board/TaskDetailModal.tsx`
 
 **Step 1: BoardHeader 컴포넌트**
 
@@ -1386,7 +1649,225 @@ export function BoardHeader({ projectName, onCreateTask }: BoardHeaderProps) {
 }
 ```
 
-**Step 2: DashboardPage 수정**
+**Step 2: TaskDetailModal 컴포넌트**
+
+```typescript
+// frontend/src/components/board/TaskDetailModal.tsx
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useUpdateTask } from '@/hooks/useTasks';
+import type { Task, TaskStatus } from '@/types/task';
+import type { WorkspaceRole } from '@/types/workspace';
+
+interface TaskDetailModalProps {
+  task: Task | null;
+  myRole: WorkspaceRole;
+  isOpen: boolean;
+  onClose: () => void;
+  onDelete?: (taskId: string) => void;
+}
+
+const statusOptions: { value: TaskStatus; label: string }[] = [
+  { value: 'todo', label: 'To Do' },
+  { value: 'doing', label: 'Doing' },
+  { value: 'done', label: 'Done' },
+  { value: 'blocked', label: 'Blocked' },
+];
+
+export function TaskDetailModal({ task, myRole, isOpen, onClose, onDelete }: TaskDetailModalProps) {
+  const updateTask = useUpdateTask();
+  const [status, setStatus] = useState<TaskStatus>(task?.status ?? 'todo');
+
+  const canEdit = myRole === 'owner' || myRole === 'editor';
+  const canDelete = myRole === 'owner';
+
+  if (!isOpen || !task) return null;
+
+  const handleStatusChange = async (newStatus: TaskStatus) => {
+    setStatus(newStatus);
+    await updateTask.mutateAsync({
+      taskId: task.id,
+      data: { status: newStatus },
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+        <div className="flex items-start justify-between mb-4">
+          <h2 className="text-lg font-bold">{task.title}</h2>
+          {!canEdit && (
+            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+              읽기 전용
+            </span>
+          )}
+        </div>
+
+        {task.description && (
+          <p className="text-sm text-muted-foreground mb-4">{task.description}</p>
+        )}
+
+        <div className="space-y-3 mb-6">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium w-20">상태:</span>
+            {canEdit ? (
+              <select
+                value={status}
+                onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
+                className="border rounded px-2 py-1 text-sm"
+              >
+                {statusOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-sm">{status}</span>
+            )}
+          </div>
+          {task.assignee && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium w-20">담당자:</span>
+              <span className="text-sm">{task.assignee.name}</span>
+            </div>
+          )}
+          {task.due_date && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium w-20">마감일:</span>
+              <span className="text-sm">{new Date(task.due_date).toLocaleDateString()}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-between">
+          <div>
+            {canDelete && onDelete && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  if (confirm('정말 삭제하시겠습니까?')) {
+                    onDelete(task.id);
+                    onClose();
+                  }
+                }}
+              >
+                삭제
+              </Button>
+            )}
+          </div>
+          <Button variant="ghost" onClick={onClose}>
+            닫기
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+**Step 3: CreateTaskModal 컴포넌트**
+
+```typescript
+// frontend/src/components/board/CreateTaskModal.tsx
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useCreateTask } from '@/hooks/useTasks';
+import type { TaskStatus } from '@/types/task';
+
+interface CreateTaskModalProps {
+  projectId: string;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function CreateTaskModal({ projectId, isOpen, onClose }: CreateTaskModalProps) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [status, setStatus] = useState<TaskStatus>('todo');
+  const [dueDate, setDueDate] = useState('');
+  const createTask = useCreateTask(projectId);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await createTask.mutateAsync({
+      title,
+      description: description || undefined,
+      status,
+      due_date: dueDate || undefined,
+    });
+    setTitle('');
+    setDescription('');
+    setStatus('todo');
+    setDueDate('');
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <h2 className="text-lg font-bold mb-4">새 태스크</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">제목 *</label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="태스크 제목"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">설명</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="태스크 설명 (선택)"
+                className="w-full border rounded px-3 py-2 text-sm min-h-[80px]"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">상태</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                className="w-full border rounded px-3 py-2"
+              >
+                <option value="todo">To Do</option>
+                <option value="doing">Doing</option>
+                <option value="done">Done</option>
+                <option value="blocked">Blocked</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">마감일</label>
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-6">
+            <Button type="button" variant="ghost" onClick={onClose}>
+              취소
+            </Button>
+            <Button type="submit" disabled={createTask.isPending}>
+              {createTask.isPending ? '생성 중...' : '생성'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+```
+
+**Step 4: DashboardPage 수정**
 
 ```typescript
 // frontend/src/pages/DashboardPage.tsx
@@ -1399,6 +1880,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { Button } from '@/components/ui/button';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { BoardHeader } from '@/components/board/BoardHeader';
+import { CreateTaskModal } from '@/components/board/CreateTaskModal';
 
 export function DashboardPage() {
   const { user, logout } = useAuth();
@@ -1484,16 +1966,284 @@ export function DashboardPage() {
           </>
         )}
       </main>
+
+      {/* Modals */}
+      {selectedProjectId && (
+        <CreateTaskModal
+          projectId={selectedProjectId}
+          isOpen={isCreateModalOpen}
+          onClose={() => setCreateModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
 ```
 
-**Step 3: 커밋**
+**Step 5: 커밋**
 
 ```bash
-git add frontend/src/pages/DashboardPage.tsx frontend/src/components/board/BoardHeader.tsx
+git add frontend/src/pages/DashboardPage.tsx frontend/src/components/board/BoardHeader.tsx \
+        frontend/src/components/board/CreateTaskModal.tsx frontend/src/components/board/TaskDetailModal.tsx
 git commit -m "feat: integrate Kanban board into Dashboard with workspace/project selection"
+```
+
+---
+
+### Task 2.6: 태스크 삭제 기능 연결
+
+**Files:**
+- Modify: `frontend/src/hooks/useTasks.ts`
+- Modify: `frontend/src/services/api.ts`
+- Modify: `frontend/src/pages/DashboardPage.tsx`
+
+> Note: TaskDetailModal은 Task 2.5에서 이미 삭제 버튼을 포함하여 생성됨. 이 Task에서는 API 연결만 추가.
+
+**Step 1: API 함수 추가**
+
+```typescript
+// frontend/src/services/api.ts 의 tasks에 추가
+tasks: {
+  // ... 기존 ...
+  delete: (taskId: string) => apiClient.delete(`/tasks/${taskId}`),
+},
+```
+
+**Step 2: Hook 추가**
+
+```typescript
+// frontend/src/hooks/useTasks.ts 에 추가
+export function useDeleteTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) => api.tasks.delete(taskId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: q => q.queryKey[2] === 'tasks' });
+    },
+  });
+}
+```
+
+**Step 3: DashboardPage에서 삭제 기능 연결**
+
+```typescript
+// frontend/src/pages/DashboardPage.tsx 에 추가
+import { useTasks, useCreateTask, useDeleteTask } from '@/hooks/useTasks';
+import { TaskDetailModal } from '@/components/board/TaskDetailModal';
+
+// ... 컴포넌트 내부 ...
+const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+const deleteTaskMutation = useDeleteTask();
+
+const selectedProject = projects?.find((p) => p.id === selectedProjectId);
+const myRole = selectedProject?.my_role ?? 'viewer';
+
+const handleDeleteTask = (taskId: string) => {
+  deleteTaskMutation.mutate(taskId);
+};
+
+// ... return 내부에 추가 ...
+<KanbanBoard
+  tasks={tasks || []}
+  onTaskClick={(task) => setSelectedTask(task)}
+/>
+
+<TaskDetailModal
+  task={selectedTask}
+  myRole={myRole}
+  isOpen={!!selectedTask}
+  onClose={() => setSelectedTask(null)}
+  onDelete={handleDeleteTask}
+/>
+```
+
+**Step 4: 커밋**
+
+```bash
+git add frontend/src/services/api.ts frontend/src/hooks/useTasks.ts \
+        frontend/src/pages/DashboardPage.tsx
+git commit -m "feat: connect task delete functionality (owner only)"
+```
+
+---
+
+### Task 2.7: 멤버 초대 UI 구현
+
+**Files:**
+- Modify: `frontend/src/types/workspace.ts`
+- Modify: `frontend/src/services/api.ts`
+- Create: `frontend/src/hooks/useWorkspaceMembers.ts`
+- Create: `frontend/src/components/workspace/MemberList.tsx`
+- Create: `frontend/src/components/workspace/InviteMemberModal.tsx`
+
+**Step 1: WorkspaceMember 타입 추가**
+
+```typescript
+// frontend/src/types/workspace.ts 에 추가
+export interface WorkspaceMember {
+  id: string;
+  user_id: string;
+  role: WorkspaceRole;
+  created_at: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+```
+
+**Step 2: API 함수 추가**
+
+```typescript
+// frontend/src/services/api.ts 의 workspaces에 추가
+import type { WorkspaceMember } from '@/types/workspace';
+
+workspaces: {
+  // ... 기존 ...
+  members: {
+    list: (workspaceId: string) =>
+      apiClient.get<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`),
+    add: (workspaceId: string, data: { email: string; role: WorkspaceRole }) =>
+      apiClient.post<WorkspaceMember>(`/workspaces/${workspaceId}/members`, data),
+    remove: (workspaceId: string, userId: string) =>
+      apiClient.delete(`/workspaces/${workspaceId}/members/${userId}`),
+  },
+},
+```
+
+**Step 3: Hook 작성**
+
+```typescript
+// frontend/src/hooks/useWorkspaceMembers.ts
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/services/api';
+import type { WorkspaceRole } from '@/types/workspace';
+
+export function useWorkspaceMembers(workspaceId: string | null) {
+  return useQuery({
+    queryKey: ['workspaces', workspaceId, 'members'],
+    queryFn: () => api.workspaces.members.list(workspaceId!).then(r => r.data),
+    enabled: !!workspaceId,
+  });
+}
+
+export function useAddMember(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { email: string; role: WorkspaceRole }) =>
+      api.workspaces.members.add(workspaceId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] });
+    },
+  });
+}
+
+export function useRemoveMember(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      api.workspaces.members.remove(workspaceId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'members'] });
+    },
+  });
+}
+```
+
+**Step 4: InviteMemberModal 컴포넌트**
+
+```typescript
+// frontend/src/components/workspace/InviteMemberModal.tsx
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useAddMember } from '@/hooks/useWorkspaceMembers';
+import type { WorkspaceRole } from '@/types/workspace';
+
+interface InviteMemberModalProps {
+  workspaceId: string;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function InviteMemberModal({ workspaceId, isOpen, onClose }: InviteMemberModalProps) {
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<WorkspaceRole>('viewer');
+  const [error, setError] = useState<string | null>(null);
+  const addMember = useAddMember(workspaceId);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      await addMember.mutateAsync({ email, role });
+      setEmail('');
+      onClose();
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        setError('해당 이메일의 사용자를 찾을 수 없습니다.');
+      } else {
+        setError('초대에 실패했습니다. 다시 시도해주세요.');
+      }
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <h2 className="text-lg font-bold mb-4">멤버 초대</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">이메일</label>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="user@example.com"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">권한</label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as WorkspaceRole)}
+                className="w-full border rounded px-3 py-2"
+              >
+                <option value="viewer">Viewer (읽기 전용)</option>
+                <option value="editor">Editor (편집 가능)</option>
+                <option value="owner">Owner (관리자)</option>
+              </select>
+            </div>
+            {error && (
+              <p className="text-sm text-red-500">{error}</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 mt-6">
+            <Button type="button" variant="ghost" onClick={onClose}>
+              취소
+            </Button>
+            <Button type="submit" disabled={addMember.isPending}>
+              {addMember.isPending ? '초대 중...' : '초대'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+```
+
+**Step 5: 커밋**
+
+```bash
+git add frontend/src/services/api.ts frontend/src/hooks/useWorkspaceMembers.ts \
+        frontend/src/components/workspace/
+git commit -m "feat: implement workspace member invite UI (owner only)"
 ```
 
 ---
@@ -1540,13 +2290,18 @@ git commit -m "feat: integrate Kanban board into Dashboard with workspace/projec
 - [ ] `GET /workspaces/{id}/projects` 응답 확인
 - [ ] `GET /projects/{id}/tasks` 응답 확인
 - [ ] TaskEvent 생성/상태변경 시 기록 확인
+- [ ] `DELETE /tasks/{id}` Owner만 성공, Editor/Viewer는 403
+- [ ] `POST /workspaces/{id}/members` Owner만 성공
+- [ ] `GET /workspaces/{id}/members` 멤버 목록 확인
 
 ### Phase 2 완료 체크
 - [ ] 워크스페이스 선택 시 프로젝트 목록 표시
 - [ ] 프로젝트 선택 시 Kanban 보드 표시
 - [ ] 4컬럼(todo/doing/done/blocked) 렌더링
-- [ ] "내 태스크만" 토글 동작
+- [ ] "내 태스크만" 토글 동작 (서버 필터링)
 - [ ] 새 태스크 생성 후 보드에 표시
+- [ ] Owner만 태스크 삭제 버튼 표시/동작
+- [ ] Owner만 멤버 초대 UI 표시/동작
 
 ### Phase 3 완료 체크
 - [ ] Owner만 공유 링크 생성 가능

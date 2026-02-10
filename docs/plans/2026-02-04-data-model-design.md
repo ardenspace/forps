@@ -168,7 +168,7 @@
 | token | String | unique, indexed, URL용 토큰 |
 | scope | Enum | project_read (MVP에서 이것만 사용) |
 | is_active | Boolean | 활성 여부 (철회 시 false) |
-| expires_at | DateTime? | 만료 시각 (null = 무기한) |
+| expires_at | DateTime | 만료 시각 (NOT NULL, 생성 시 30일 후 자동 설정) |
 | created_by | UUID | FK → User (생성자) ← **추가** |
 | created_at | DateTime | 생성 시각 |
 
