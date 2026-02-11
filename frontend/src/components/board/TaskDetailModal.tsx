@@ -1,6 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useUpdateTask } from '@/hooks/useTasks';
 import type { Task, TaskStatus } from '@/types/task';
 import type { WorkspaceRole, WorkspaceMember } from '@/types/workspace';
@@ -32,7 +30,6 @@ export function TaskDetailModal({ task, myRole, members, isOpen, onClose, onDele
   const [isSaving, setIsSaving] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
 
-  // Original values for comparison
   const [original, setOriginal] = useState({
     title: '',
     description: '',
@@ -109,83 +106,87 @@ export function TaskDetailModal({ task, myRole, members, isOpen, onClose, onDele
     }
   };
 
+  const inputClass =
+    'border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:bg-gray-100 disabled:cursor-not-allowed';
+
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
       onClick={handleBackdropClick}
     >
-      <div ref={modalRef} className="bg-white rounded-lg p-6 w-full max-w-lg">
+      <div ref={modalRef} className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 w-full max-w-lg">
         <div className="flex justify-between items-center mb-4">
           {!canEdit && (
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+            <span className="text-xs bg-yellow-200 text-black border-2 border-black font-bold px-2 py-1">
               읽기 전용
             </span>
           )}
           <div className="ml-auto">
-            {isSaving && <span className="text-xs text-gray-500">저장 중...</span>}
-            {showSaved && <span className="text-xs text-green-600">저장됨 ✓</span>}
+            {isSaving && (
+              <span className="text-xs font-bold text-muted-foreground">저장 중...</span>
+            )}
+            {showSaved && (
+              <span className="text-xs font-bold text-green-700">저장됨 ✓</span>
+            )}
           </div>
         </div>
 
         <div className="space-y-4 mb-6">
-          {/* Title */}
           <div>
-            <label className="text-sm font-medium">제목</label>
-            <Input
+            <label className="font-bold text-sm block mb-1">제목</label>
+            <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               disabled={!canEdit || isSaving}
-              className="mt-1"
+              className={inputClass}
             />
           </div>
 
-          {/* Description */}
           <div>
-            <label className="text-sm font-medium">설명</label>
+            <label className="font-bold text-sm block mb-1">설명</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={!canEdit || isSaving}
-              className="w-full border rounded px-3 py-2 text-sm min-h-[80px] mt-1 disabled:bg-gray-50"
               placeholder="설명 (선택)"
+              className={`${inputClass} min-h-[80px] resize-none`}
             />
           </div>
 
-          {/* Status */}
           <div>
-            <label className="text-sm font-medium">상태</label>
+            <label className="font-bold text-sm block mb-1">상태</label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as TaskStatus)}
               disabled={!canEdit || isSaving}
-              className="w-full border rounded px-3 py-2 text-sm mt-1 disabled:bg-gray-50"
+              className={inputClass}
             >
               {statusOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
               ))}
             </select>
           </div>
 
-          {/* Due Date */}
           <div>
-            <label className="text-sm font-medium">마감일</label>
-            <Input
+            <label className="font-bold text-sm block mb-1">마감일</label>
+            <input
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
               disabled={!canEdit || isSaving}
-              className="mt-1"
+              className={inputClass}
             />
           </div>
 
-          {/* Assignee */}
           <div>
-            <label className="text-sm font-medium">담당자</label>
+            <label className="font-bold text-sm block mb-1">담당자</label>
             <select
               value={assigneeId || ''}
               onChange={(e) => setAssigneeId(e.target.value || null)}
               disabled={!canEdit || isSaving}
-              className="w-full border rounded px-3 py-2 text-sm mt-1 disabled:bg-gray-50"
+              className={inputClass}
             >
               <option value="">담당자 없음</option>
               {members.map((member) => (
@@ -200,9 +201,8 @@ export function TaskDetailModal({ task, myRole, members, isOpen, onClose, onDele
         <div className="flex justify-between">
           <div>
             {canDelete && onDelete && (
-              <Button
-                variant="destructive"
-                size="sm"
+              <button
+                type="button"
                 disabled={isSaving}
                 onClick={() => {
                   if (confirm('정말 삭제하시겠습니까?')) {
@@ -210,14 +210,20 @@ export function TaskDetailModal({ task, myRole, members, isOpen, onClose, onDele
                     onClose();
                   }
                 }}
+                className="bg-red-500 text-white border-2 border-black font-bold px-4 py-2 text-sm hover:bg-red-600 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
               >
                 삭제
-              </Button>
+              </button>
             )}
           </div>
-          <Button variant="ghost" size="sm" onClick={handleClose} disabled={isSaving}>
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={isSaving}
+            className="border-2 border-black font-bold px-4 py-2 text-sm hover:bg-yellow-100 transition-colors"
+          >
             닫기
-          </Button>
+          </button>
         </div>
       </div>
     </div>
