@@ -2,6 +2,8 @@ import { useState, useRef } from 'react';
 import { useCreateTask } from '@/hooks/useTasks';
 import type { TaskStatus } from '@/types/task';
 import type { WorkspaceMember } from '@/types/workspace';
+import { CustomSelect } from '@/components/ui/CustomSelect';
+import { DatePicker } from '@/components/ui/DatePicker';
 
 interface CreateTaskModalProps {
   projectId: string;
@@ -10,6 +12,13 @@ interface CreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+const statusOptions: { value: TaskStatus; label: string }[] = [
+  { value: 'todo', label: 'To Do' },
+  { value: 'doing', label: 'Doing' },
+  { value: 'done', label: 'Done' },
+  { value: 'blocked', label: 'Blocked' },
+];
 
 export function CreateTaskModal({ projectId, members, currentUserId, isOpen, onClose }: CreateTaskModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
@@ -45,6 +54,14 @@ export function CreateTaskModal({ projectId, members, currentUserId, isOpen, onC
 
   if (!isOpen) return null;
 
+  const memberOptions = [
+    { value: '', label: '담당자 없음' },
+    ...members.map((m) => ({
+      value: m.user_id,
+      label: m.user_id === currentUserId ? `${m.user.name} (나)` : m.user.name,
+    })),
+  ];
+
   return (
     <div
       className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
@@ -75,39 +92,26 @@ export function CreateTaskModal({ projectId, members, currentUserId, isOpen, onC
             </div>
             <div>
               <label className="font-bold text-sm block mb-1">상태</label>
-              <select
+              <CustomSelect
                 value={status}
-                onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-              >
-                <option value="todo">To Do</option>
-                <option value="doing">Doing</option>
-                <option value="done">Done</option>
-                <option value="blocked">Blocked</option>
-              </select>
+                onChange={(v) => setStatus(v as TaskStatus)}
+                options={statusOptions}
+              />
             </div>
             <div>
               <label className="font-bold text-sm block mb-1">담당자</label>
-              <select
+              <CustomSelect
                 value={assigneeId}
-                onChange={(e) => setAssigneeId(e.target.value)}
-                className="border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-              >
-                <option value="">담당자 없음</option>
-                {members.map((member) => (
-                  <option key={member.user_id} value={member.user_id}>
-                    {member.user.name} {member.user_id === currentUserId ? '(나)' : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={setAssigneeId}
+                options={memberOptions}
+              />
             </div>
             <div>
               <label className="font-bold text-sm block mb-1">마감일</label>
-              <input
-                type="date"
+              <DatePicker
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                onChange={setDueDate}
+                placeholder="날짜 선택"
               />
             </div>
           </div>

@@ -87,9 +87,27 @@
 - Replace shadcn Input with plain `<input>`
 - Remove Label, CardHeader, CardFooter, CardTitle etc — use semantic HTML + Tailwind
 - Keep shadcn imports only where explicitly in use (ghost logout in sidebar)
+- NEVER use native `<select>` or `<input type="date">` — use CustomSelect and DatePicker instead
+
+## Custom Form Components
+- `CustomSelect`: `frontend/src/components/ui/CustomSelect.tsx` — replaces all `<select>`
+  - Trigger: `border-2 border-black w-full flex items-center justify-between bg-white`
+  - Dropdown: `absolute top-full border-2 border-black border-t-0 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-48 overflow-y-auto`
+  - Selected option: `bg-yellow-400 font-bold`, hover: `hover:bg-yellow-50`
+  - Disabled: `bg-gray-100 cursor-not-allowed`
+  - Chevron rotates 180deg when open via `transition-transform`
+- `DatePicker`: `frontend/src/components/ui/DatePicker.tsx` — replaces all `<input type="date">`
+  - Uses react-day-picker v9 + date-fns v4 (installed)
+  - Import: `import 'react-day-picker/style.css'` required in DatePicker.tsx
+  - v9 classNames keys (NOT v8): `month_caption`, `button_previous`, `button_next`, `day_button`, `weekdays`, `weekday`, `weeks`, `week`, `month_grid` — NOT the deprecated v8 names
+  - v9 modifier keys: `selected`, `today`, `outside`, `disabled` (flat, not prefixed with `day_`)
+  - Popup: `border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-3`
+  - Clear button: `border-2 border-black text-xs font-bold py-1 hover:bg-yellow-100`
+  - Display format: `yyyy. M. d` (Korean convention)
 
 ## Key File Paths
 - Pages: `frontend/src/pages/LoginPage.tsx`, `RegisterPage.tsx`
 - Board: `frontend/src/components/board/BoardHeader.tsx`, `KanbanColumn.tsx`, `TaskCard.tsx`, `CreateTaskModal.tsx`, `TaskDetailModal.tsx`
 - Workspace: `frontend/src/components/workspace/CreateProjectModal.tsx`
 - Week: `frontend/src/components/week/WeekView.tsx`, `WeekColumn.tsx`
+- UI components: `frontend/src/components/ui/CustomSelect.tsx`, `DatePicker.tsx`
