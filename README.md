@@ -1,4 +1,4 @@
-# for-ps
+# forps
 
 B2B 협업 업무 관리 툴 (Task Management & Collaboration Tool)
 
@@ -18,7 +18,7 @@ B2B 협업 업무 관리 툴 (Task Management & Collaboration Tool)
 ## 프로젝트 구조
 
 ```
-for-ps/
+forps/
 ├── backend/
 │   ├── app/
 │   │   ├── models/          # DB 모델
