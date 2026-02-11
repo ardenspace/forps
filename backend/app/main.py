@@ -5,7 +5,7 @@ from app.config import settings
 from app.api.v1.router import api_v1_router
 
 app = FastAPI(
-    title="for-ps API",
+    title="forps API",
     description="B2B Task Management & Collaboration Tool",
     version="0.1.0"
 )
@@ -22,7 +22,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "for-ps API is running"}
+    return {"message": "forps API is running"}
 
 
 @app.get("/health")
