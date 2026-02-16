@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useWorkspaces, useWorkspaceMembers } from '@/hooks/useWorkspaces';
-import { useProjects } from '@/hooks/useProjects';
+import { useWorkspaces } from '@/hooks/useWorkspaces';
+import { useProjects, useProjectMembers } from '@/hooks/useProjects';
 import { useTasks, useDeleteTask, useWeekTasks } from '@/hooks/useTasks';
 import { useUIStore } from '@/stores/uiStore';
 import { Button } from '@/components/ui/button';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { BoardHeader } from '@/components/board/BoardHeader';
-import { CreateTaskModal } from '@/components/board/CreateTaskModal';
-import { TaskDetailModal } from '@/components/board/TaskDetailModal';
+import { TaskModal } from '@/components/board/TaskModal';
 import { CreateProjectModal } from '@/components/workspace/CreateProjectModal';
+import { ProjectMemberManager } from '@/components/project/ProjectMemberManager';
 import { WeekView, getMonday } from '@/components/week/WeekView';
+import { TaskTableView } from '@/components/table/TaskTableView';
+import { ShareLinkManager } from '@/components/share/ShareLinkManager';
 import type { Task } from '@/types/task';
 
-type ViewMode = 'board' | 'week';
+type ViewMode = 'board' | 'table' | 'week';
 
 export function DashboardPage() {
   const { user, logout } = useAuth();
@@ -28,7 +30,20 @@ export function DashboardPage() {
   const { data: workspaces } = useWorkspaces();
 
   useEffect(() => {
-    if (workspaces && workspaces.length > 0 && !selectedWorkspaceId) {
+    if (!workspaces) {
+      return;
+    }
+
+    if (workspaces.length === 0) {
+      setSelectedWorkspace(null);
+      return;
+    }
+
+    const hasSelectedWorkspace = selectedWorkspaceId
+      ? workspaces.some((ws) => ws.id === selectedWorkspaceId)
+      : false;
+
+    if (!hasSelectedWorkspace) {
       setSelectedWorkspace(workspaces[0].id);
     }
   }, [workspaces, selectedWorkspaceId, setSelectedWorkspace]);
@@ -36,7 +51,7 @@ export function DashboardPage() {
   const currentWorkspace = workspaces?.find((ws) => ws.id === selectedWorkspaceId);
 
   const { data: projects } = useProjects(selectedWorkspaceId);
-  const { data: members } = useWorkspaceMembers(selectedWorkspaceId);
+  const { data: members } = useProjectMembers(selectedProjectId);
   const { data: tasks, isLoading } = useTasks(selectedProjectId, {
     mine_only: taskFilters.mineOnly,
   });
@@ -46,6 +61,8 @@ export function DashboardPage() {
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [isCreateTaskModalOpen, setCreateTaskModalOpen] = useState(false);
   const [isCreateProjectModalOpen, setCreateProjectModalOpen] = useState(false);
+  const [isProjectMemberModalOpen, setProjectMemberModalOpen] = useState(false);
+  const [isShareManagerOpen, setShareManagerOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const weekStartStr = weekStart.toISOString().split('T')[0];
@@ -55,6 +72,25 @@ export function DashboardPage() {
 
   const selectedProject = projects?.find((p) => p.id === selectedProjectId);
   const myRole = selectedProject?.my_role ?? 'viewer';
+
+  useEffect(() => {
+    if (!projects) {
+      return;
+    }
+
+    if (projects.length === 0) {
+      setSelectedProject(null);
+      return;
+    }
+
+    const hasSelectedProject = selectedProjectId
+      ? projects.some((project) => project.id === selectedProjectId)
+      : false;
+
+    if (!hasSelectedProject) {
+      setSelectedProject(projects[0].id);
+    }
+  }, [projects, selectedProjectId, setSelectedProject]);
 
   const handleDeleteTask = (taskId: string) => {
     deleteTaskMutation.mutate(taskId);
@@ -78,6 +114,16 @@ export function DashboardPage() {
                 onClick={() => setViewMode('board')}
               >
                 Board
+              </button>
+              <button
+                className={`px-3 py-1 text-sm font-bold border-l-2 border-black transition-colors ${
+                  viewMode === 'table'
+                    ? 'bg-black text-white'
+                    : 'bg-background hover:bg-yellow-100'
+                }`}
+                onClick={() => setViewMode('table')}
+              >
+                Table
               </button>
               <button
                 className={`px-3 py-1 text-sm font-bold border-l-2 border-black transition-colors ${
@@ -157,11 +203,20 @@ export function DashboardPage() {
               <span>새 프로젝트</span>
             </button>
           )}
+
+          {selectedProjectId && myRole === 'owner' && (
+            <button
+              className="mt-2 text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1.5 rounded border-2 border-dashed border-muted-foreground hover:border-black hover:bg-yellow-50 transition-all font-medium w-full"
+              onClick={() => setProjectMemberModalOpen(true)}
+            >
+              <span>프로젝트 멤버</span>
+            </button>
+          )}
         </aside>
 
         {/* Main content */}
         <main className="flex-1 overflow-auto p-6">
-          {viewMode === 'board' ? (
+          {viewMode === 'board' || viewMode === 'table' ? (
             !selectedProjectId ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center border-2 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] bg-white p-10 rounded">
@@ -180,10 +235,28 @@ export function DashboardPage() {
                   projectName={selectedProject?.name || ''}
                   onCreateTask={() => setCreateTaskModalOpen(true)}
                 />
-                <KanbanBoard
-                  tasks={tasks || []}
-                  onTaskClick={(task) => setSelectedTask(task)}
-                />
+                {myRole === 'owner' && (
+                  <div className="mb-4">
+                    <Button
+                      type="button"
+                      className="border-2 border-black font-bold"
+                      onClick={() => setShareManagerOpen(true)}
+                    >
+                      공유 링크 관리
+                    </Button>
+                  </div>
+                )}
+                {viewMode === 'board' ? (
+                  <KanbanBoard
+                    tasks={tasks || []}
+                    onTaskClick={(task) => setSelectedTask(task)}
+                  />
+                ) : (
+                  <TaskTableView
+                    tasks={tasks || []}
+                    onTaskClick={(task) => setSelectedTask(task)}
+                  />
+                )}
               </>
             )
           ) : isWeekLoading ? (
@@ -205,8 +278,9 @@ export function DashboardPage() {
       </div>
 
       {/* Modals */}
-      {selectedProjectId && viewMode === 'board' && user && (
-        <CreateTaskModal
+      {selectedProjectId && user && (
+        <TaskModal
+          mode="create"
           projectId={selectedProjectId}
           members={members || []}
           currentUserId={user.id}
@@ -223,7 +297,26 @@ export function DashboardPage() {
         />
       )}
 
-      <TaskDetailModal
+      {selectedProjectId && user && myRole === 'owner' && (
+        <ProjectMemberManager
+          projectId={selectedProjectId}
+          currentUserId={user.id}
+          isOpen={isProjectMemberModalOpen}
+          onClose={() => setProjectMemberModalOpen(false)}
+        />
+      )}
+
+      {selectedProjectId && myRole === 'owner' && (
+        <ShareLinkManager
+          projectId={selectedProjectId}
+          projectName={selectedProject?.name || ''}
+          isOpen={isShareManagerOpen}
+          onClose={() => setShareManagerOpen(false)}
+        />
+      )}
+
+      <TaskModal
+        mode="edit"
         task={selectedTask}
         myRole={myRole}
         members={members || []}

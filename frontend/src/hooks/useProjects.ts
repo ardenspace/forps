@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
-import type { ProjectCreate } from '@/types/project';
+import type { ProjectCreate, AddProjectMemberRequest, UpdateProjectMemberRequest } from '@/types/project';
 
 export function useProjects(workspaceId: string | null) {
   return useQuery({
@@ -24,6 +24,45 @@ export function useCreateProject(workspaceId: string) {
     mutationFn: (data: ProjectCreate) => api.projects.create(workspaceId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'projects'] });
+    },
+  });
+}
+
+export function useProjectMembers(projectId: string | null) {
+  return useQuery({
+    queryKey: ['projects', projectId, 'members'],
+    queryFn: () => api.projects.getMembers(projectId!).then((r) => r.data),
+    enabled: !!projectId,
+  });
+}
+
+export function useAddProjectMember(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: AddProjectMemberRequest) => api.projects.addMember(projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'members'] });
+    },
+  });
+}
+
+export function useUpdateProjectMemberRole(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, data }: { userId: string; data: UpdateProjectMemberRequest }) =>
+      api.projects.updateMemberRole(projectId, userId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'members'] });
+    },
+  });
+}
+
+export function useRemoveProjectMember(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => api.projects.removeMember(projectId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'members'] });
     },
   });
 }

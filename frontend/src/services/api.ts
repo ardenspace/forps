@@ -9,10 +9,13 @@ import type {
   TaskUpdate,
   Workspace,
   WorkspaceCreate,
-  WorkspaceMember,
-  AddMemberRequest,
   Project,
   ProjectCreate,
+  ProjectMember,
+  AddProjectMemberRequest,
+  UpdateProjectMemberRequest,
+  ShareLink,
+  ShareLinkCreateRequest,
 } from '@/types';
 
 const apiClient = axios.create({
@@ -50,17 +53,16 @@ export const api = {
     login: (data: LoginRequest) =>
       apiClient.post<AuthResponse>('/auth/login', data),
     me: () => apiClient.get<User>('/auth/me'),
+    logout: () => apiClient.post('/auth/logout'),
   },
 
   workspaces: {
     list: () => apiClient.get<Workspace[]>('/workspaces'),
     create: (data: WorkspaceCreate) => apiClient.post<Workspace>('/workspaces', data),
     get: (id: string) => apiClient.get<Workspace>(`/workspaces/${id}`),
-    getMembers: (id: string) => apiClient.get<WorkspaceMember[]>(`/workspaces/${id}/members`),
-    addMember: (id: string, data: AddMemberRequest) =>
-      apiClient.post<WorkspaceMember>(`/workspaces/${id}/members`, data),
-    removeMember: (workspaceId: string, userId: string) =>
-      apiClient.delete(`/workspaces/${workspaceId}/members/${userId}`),
+    update: (id: string, data: { name?: string; description?: string }) =>
+      apiClient.patch<Workspace>(`/workspaces/${id}`, data),
+    delete: (id: string) => apiClient.delete(`/workspaces/${id}`),
   },
 
   projects: {
@@ -68,7 +70,25 @@ export const api = {
       apiClient.get<Project[]>(`/workspaces/${workspaceId}/projects`),
     create: (workspaceId: string, data: ProjectCreate) =>
       apiClient.post<Project>(`/workspaces/${workspaceId}/projects`, data),
+    update: (workspaceId: string, projectId: string, data: { name?: string; description?: string }) =>
+      apiClient.patch<Project>(`/workspaces/${workspaceId}/projects/${projectId}`, data),
+    delete: (workspaceId: string, projectId: string) =>
+      apiClient.delete(`/workspaces/${workspaceId}/projects/${projectId}`),
     get: (id: string) => apiClient.get<Project>(`/projects/${id}`),
+    getMembers: (projectId: string) => apiClient.get<ProjectMember[]>(`/projects/${projectId}/members`),
+    addMember: (projectId: string, data: AddProjectMemberRequest) =>
+      apiClient.post<ProjectMember>(`/projects/${projectId}/members`, data),
+    updateMemberRole: (projectId: string, userId: string, data: UpdateProjectMemberRequest) =>
+      apiClient.patch<ProjectMember>(`/projects/${projectId}/members/${userId}`, data),
+    removeMember: (projectId: string, userId: string) =>
+      apiClient.delete(`/projects/${projectId}/members/${userId}`),
+  },
+
+  shareLinks: {
+    list: (projectId: string) => apiClient.get<ShareLink[]>(`/projects/${projectId}/share-links`),
+    create: (projectId: string, data?: ShareLinkCreateRequest) =>
+      apiClient.post<ShareLink>(`/projects/${projectId}/share-links`, data ?? {}),
+    deactivate: (shareLinkId: string) => apiClient.delete(`/share-links/${shareLinkId}`),
   },
 
   tasks: {

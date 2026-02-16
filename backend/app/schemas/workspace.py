@@ -26,23 +26,3 @@ class WorkspaceResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
-
-
-class WorkspaceMemberResponse(BaseModel):
-    id: UUID
-    user_id: UUID
-    role: WorkspaceRole
-    created_at: datetime
-    user: "UserBrief"
-
-    model_config = {"from_attributes": True}
-
-
-class AddMemberRequest(BaseModel):
-    email: str
-    role: WorkspaceRole = WorkspaceRole.VIEWER
-
-
-# Forward reference
-from app.schemas.task import UserBrief
-WorkspaceMemberResponse.model_rebuild()

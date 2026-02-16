@@ -1,4 +1,5 @@
 import type { WorkspaceRole } from './workspace';
+import type { UserBrief } from './user';
 
 export interface Project {
   id: string;
@@ -14,4 +15,21 @@ export interface Project {
 export interface ProjectCreate {
   name: string;
   description?: string;
+}
+
+export interface ProjectMember {
+  id: string;
+  user_id: string;
+  role: WorkspaceRole;
+  created_at: string;
+  user: UserBrief;
+}
+
+export interface AddProjectMemberRequest {
+  email: string;
+  role: WorkspaceRole;
+}
+
+export interface UpdateProjectMemberRequest {
+  role: WorkspaceRole;
 }
