@@ -11,7 +11,7 @@ B2B 협업 업무 관리 툴 (Task Management & Collaboration Tool)
 - **Alembic** - DB 마이그레이션
 - **JWT** - 인증
 
-### Frontend (예정)
+### Frontend
 - **Vite + React** - SPA
 - **shadcn/ui + Tailwind** - UI 라이브러리
 
@@ -31,8 +31,8 @@ forps/
 │   │   ├── core/            # 핵심 로직
 │   │   │   ├── security.py  # JWT, 비밀번호 해싱
 │   │   │   └── permissions.py
-│   │   ├── api/             # API 라우터 (TODO)
-│   │   ├── schemas/         # Pydantic 스키마 (TODO)
+│   │   ├── api/             # API 라우터
+│   │   ├── schemas/         # Pydantic 스키마
 │   │   ├── config.py
 │   │   ├── database.py
 │   │   ├── dependencies.py
@@ -40,7 +40,7 @@ forps/
 │   ├── alembic/             # DB 마이그레이션
 │   ├── requirements.txt
 │   └── .env
-├── frontend/ (TODO)
+├── frontend/
 └── docker-compose.yml
 ```
 
@@ -130,10 +130,18 @@ railway login
 railway up
 ```
 
-## 다음 단계
+## 구현 상태 (2026-02 기준)
 
-- [ ] API 엔드포인트 구현 (auth, workspaces, projects, tasks)
-- [ ] 권한 체크 데코레이터 완성
-- [ ] 프론트엔드 세팅 (Vite + React)
-- [ ] Table/Kanban 뷰 구현
+- [x] API 엔드포인트 기본 구현 (auth, workspaces, projects, tasks, share)
+- [x] 프론트엔드 세팅 (Vite + React + TypeScript + Tailwind)
+- [x] Kanban 뷰 구현
+- [ ] Table 뷰 구현
 - [ ] Discord 웹훅 (일일/주간 리포트)
+
+## 남은 주요 미구현 항목
+
+- [ ] Workspace 수정/삭제 API
+- [ ] Workspace 멤버 role 변경 API
+- [ ] Project 수정/삭제 API
+- [ ] Project 멤버 관리 API (조회/추가/수정/삭제)
+- [ ] ShareLink 생성/관리 프론트 UI

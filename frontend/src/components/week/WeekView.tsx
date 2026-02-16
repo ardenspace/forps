@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
-import { Button } from '@/components/ui/button';
-import { WeekColumn } from './WeekColumn';
+import { WeekRow } from './WeekRow';
 import type { Task } from '@/types/task';
 
 interface WeekViewProps {
@@ -18,6 +17,13 @@ function getWeekDates(start: Date): Date[] {
     dates.push(date);
   }
   return dates;
+}
+
+function toLocalDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function isSameDay(d1: Date, d2: Date): boolean {
@@ -44,21 +50,19 @@ export function WeekView({ tasks, weekStart, onWeekChange, onTaskClick }: WeekVi
   const tasksByDate = useMemo(() => {
     const map = new Map<string, Task[]>();
 
-    // Initialize each day of the week
     weekDates.forEach((date) => {
-      map.set(date.toISOString().split('T')[0], []);
+      map.set(toLocalDateKey(date), []);
     });
     map.set('no-date', []);
 
-    // Group tasks
     tasks.forEach((task) => {
       if (!task.due_date) {
         const list = map.get('no-date') || [];
         list.push(task);
         map.set('no-date', list);
       } else {
-        const taskDate = new Date(task.due_date);
-        const key = taskDate.toISOString().split('T')[0];
+        // due_date is a date string like "2026-02-12" — use directly as key
+        const key = task.due_date.split('T')[0];
         if (map.has(key)) {
           const list = map.get(key) || [];
           list.push(task);
@@ -89,49 +93,75 @@ export function WeekView({ tasks, weekStart, onWeekChange, onTaskClick }: WeekVi
   const weekEndDate = new Date(weekStart);
   weekEndDate.setDate(weekStart.getDate() + 6);
 
+  const noDateTasks = tasksByDate.get('no-date') || [];
+
   return (
     <div>
-      {/* Week Navigation */}
+      {/* Navigation bar */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handlePrevWeek}>
+          <button
+            onClick={handlePrevWeek}
+            className="border-2 border-black font-bold px-3 py-1 text-sm hover:bg-yellow-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] bg-white"
+          >
             ← 이전
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleThisWeek}>
+          </button>
+          <button
+            onClick={handleThisWeek}
+            className="border-2 border-black font-bold px-3 py-1 text-sm bg-black text-white hover:bg-yellow-400 hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+          >
             이번 주
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleNextWeek}>
+          </button>
+          <button
+            onClick={handleNextWeek}
+            className="border-2 border-black font-bold px-3 py-1 text-sm hover:bg-yellow-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] bg-white"
+          >
             다음 →
-          </Button>
+          </button>
         </div>
-        <h3 className="text-lg font-semibold">
+        <h3 className="font-black text-lg">
           {weekStart.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} -{' '}
           {weekEndDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
         </h3>
       </div>
 
-      {/* Week Grid */}
-      <div className="flex gap-2 overflow-x-auto pb-4">
-        {weekDates.map((date) => {
-          const key = date.toISOString().split('T')[0];
+      {/* Weekly rows grid */}
+      <div className="border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        {weekDates.map((date, i) => {
+          const key = toLocalDateKey(date);
+          const dayTasks = tasksByDate.get(key) || [];
+          const isToday = isSameDay(date, today);
+          const todayMidnight = new Date(today);
+          todayMidnight.setHours(0, 0, 0, 0);
+          const isPast = date < todayMidnight && !isToday;
           return (
-            <WeekColumn
+            <WeekRow
               key={key}
               date={date}
-              label=""
-              tasks={tasksByDate.get(key) || []}
+              tasks={dayTasks}
               onTaskClick={onTaskClick}
-              isToday={isSameDay(date, today)}
+              isToday={isToday}
+              isPast={isPast}
+              isLast={i === 6}
             />
           );
         })}
-        <WeekColumn
-          date={null}
-          label="마감일 없음"
-          tasks={tasksByDate.get('no-date') || []}
-          onTaskClick={onTaskClick}
-        />
       </div>
+
+      {/* No-due-date section */}
+      {noDateTasks.length > 0 && (
+        <div className="mt-4 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <WeekRow
+            date={null}
+            label="마감일 없음"
+            tasks={noDateTasks}
+            onTaskClick={onTaskClick}
+            isToday={false}
+            isPast={false}
+            isLast={true}
+          />
+        </div>
+      )}
     </div>
   );
 }

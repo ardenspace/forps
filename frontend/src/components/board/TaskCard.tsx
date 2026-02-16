@@ -1,4 +1,3 @@
-import { Card, CardContent } from '@/components/ui/card';
 import type { Task } from '@/types/task';
 
 interface TaskCardProps {
@@ -8,23 +7,19 @@ interface TaskCardProps {
 
 export function TaskCard({ task, onClick }: TaskCardProps) {
   return (
-    <Card
-      className="cursor-pointer hover:shadow-md transition-shadow"
+    <div
+      className="bg-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all cursor-pointer p-3"
       onClick={onClick}
     >
-      <CardContent className="p-3">
-        <h4 className="font-medium text-sm">{task.title}</h4>
-        {task.assignee && (
-          <p className="text-xs text-muted-foreground mt-1">
-            {task.assignee.name}
-          </p>
-        )}
-        {task.due_date && (
-          <p className="text-xs text-muted-foreground">
-            {new Date(task.due_date).toLocaleDateString()}
-          </p>
-        )}
-      </CardContent>
-    </Card>
+      <h4 className="font-bold text-sm">{task.title}</h4>
+      {task.assignee && (
+        <p className="text-xs text-muted-foreground mt-1">{task.assignee.name}</p>
+      )}
+      {task.due_date && (
+        <p className="text-xs text-muted-foreground">
+          {new Date(task.due_date).toLocaleDateString()}
+        </p>
+      )}
+    </div>
   );
 }
