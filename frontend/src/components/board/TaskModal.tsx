@@ -5,6 +5,7 @@ import type { WorkspaceRole } from '@/types/workspace';
 import type { ProjectMember } from '@/types/project';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 interface TaskModalBaseProps {
   members: ProjectMember[];
@@ -58,6 +59,7 @@ export function TaskModal(props: TaskModalProps) {
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
+  const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const [original, setOriginal] = useState({
     title: '',
@@ -97,6 +99,7 @@ export function TaskModal(props: TaskModalProps) {
       });
       setIsSaving(false);
       setShowSaved(false);
+      setDeleteConfirmOpen(false);
     }
   }, [isOpen, isCreateMode, isCreateMode ? props.currentUserId : props.task]);
 
@@ -175,6 +178,17 @@ export function TaskModal(props: TaskModalProps) {
     }
   };
 
+  const handleConfirmDelete = () => {
+    if (isCreateMode || !props.onDelete || !task) {
+      setDeleteConfirmOpen(false);
+      return;
+    }
+
+    props.onDelete(task.id);
+    setDeleteConfirmOpen(false);
+    onClose();
+  };
+
   const memberOptions = [
     { value: '', label: '담당자 없음' },
     ...members.map((m) => {
@@ -187,14 +201,15 @@ export function TaskModal(props: TaskModalProps) {
   ];
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 sm:p-4"
-      onClick={handleBackdropClick}
-    >
+    <>
       <div
-        ref={modalRef}
-        className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] w-full max-w-3xl max-h-[92vh] overflow-y-auto"
+        className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 sm:p-4"
+        onClick={handleBackdropClick}
       >
+        <div
+          ref={modalRef}
+          className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] w-full max-w-3xl max-h-[92vh] overflow-y-auto"
+        >
         <div className="p-4 sm:p-6 pt-4 sm:pt-6">
           {/* 2-column body */}
           <div className="flex flex-col md:flex-row gap-4 md:gap-6">
@@ -250,6 +265,7 @@ export function TaskModal(props: TaskModalProps) {
                   onChange={setDueDate}
                   disabled={!canEdit || isSaving}
                   placeholder="날짜 선택"
+                  align="right"
                 />
               </div>
 
@@ -270,12 +286,7 @@ export function TaskModal(props: TaskModalProps) {
                 <button
                   type="button"
                   disabled={isSaving}
-                  onClick={() => {
-                    if (confirm('정말 삭제하시겠습니까?')) {
-                      props.onDelete!(task.id);
-                      onClose();
-                    }
-                  }}
+                  onClick={() => setDeleteConfirmOpen(true)}
                   className="bg-red-500 text-white border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-red-600 transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] disabled:opacity-50"
                 >
                   삭제
@@ -327,7 +338,18 @@ export function TaskModal(props: TaskModalProps) {
             </div>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+      <ConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        title="태스크를 삭제할까요?"
+        description="삭제 후에는 복구할 수 없습니다."
+        confirmText="삭제"
+        cancelText="취소"
+        confirmVariant="destructive"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
+    </>
   );
 }

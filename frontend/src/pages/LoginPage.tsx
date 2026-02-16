@@ -14,10 +14,10 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-yellow-50 p-3 sm:p-4">
+    <div className="min-h-screen flex items-center justify-center bg-yellow-50 sm:p-4">
       <div className="border-2 border-black shadow-[6px_6px_0px_0px_rgba(244,0,4,1)] sm:shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] bg-white p-5 sm:p-8 w-full max-w-md">
         <div className="mb-5 sm:mb-6 text-center">
-          <span className="font-black text-2xl sm:text-3xl border-b-4 border-yellow-400 pb-1">forps</span>
+          <span className="font-black text-2xl sm:text-3xl border-b-4 border-[#F40004] pb-1">forps</span>
         </div>
         <h1 className="font-black text-xl sm:text-2xl mb-1">로그인</h1>
         <p className="text-xs sm:text-sm text-muted-foreground mb-5 sm:mb-6">계정에 로그인하세요</p>

@@ -70,7 +70,7 @@
 - Dashed add button: `border-2 border-dashed border-muted-foreground hover:border-black hover:bg-yellow-50`
 
 ### Kanban Columns
-- todo: `bg-white`, doing: `bg-yellow-50`, done: `bg-green-50`, blocked: `bg-red-50`
+- todo: `bg-white`, doing: `bg-yellow-50`, done: `bg-yellow-50`, blocked: `bg-red-50`
 - All: `border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]`
 
 ### TaskCard

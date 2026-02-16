@@ -9,6 +9,7 @@ interface DatePickerProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  align?: 'left' | 'right';
 }
 
 export function DatePicker({
@@ -16,6 +17,7 @@ export function DatePicker({
   onChange,
   disabled = false,
   placeholder = '날짜 선택',
+  align = 'left',
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -116,7 +118,11 @@ export function DatePicker({
 
       {/* Calendar popup */}
       {open && (
-        <div className="absolute top-full left-0 z-50 mt-0 border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-3">
+        <div
+          className={`absolute top-full z-50 mt-0 border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-3 ${
+            align === 'right' ? 'right-0' : 'left-0'
+          }`}
+        >
           <DayPicker
             mode="single"
             selected={selectedDate}

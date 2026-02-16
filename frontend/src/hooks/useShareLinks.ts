@@ -29,3 +29,23 @@ export function useDeactivateShareLink(projectId: string) {
     },
   });
 }
+
+export function useActivateShareLink(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (shareLinkId: string) => api.shareLinks.activate(shareLinkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'share-links'] });
+    },
+  });
+}
+
+export function useDeleteShareLink(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (shareLinkId: string) => api.shareLinks.delete(shareLinkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'share-links'] });
+    },
+  });
+}

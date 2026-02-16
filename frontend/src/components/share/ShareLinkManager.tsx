@@ -1,6 +1,13 @@
 import { useMemo } from 'react';
+import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useCreateShareLink, useDeactivateShareLink, useShareLinks } from '@/hooks/useShareLinks';
+import {
+  useActivateShareLink,
+  useCreateShareLink,
+  useDeactivateShareLink,
+  useDeleteShareLink,
+  useShareLinks,
+} from '@/hooks/useShareLinks';
 import type { ShareLink } from '@/types';
 
 interface ShareLinkManagerProps {
@@ -14,6 +21,8 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
   const { data: links, isLoading } = useShareLinks(isOpen ? projectId : null);
   const createShareLink = useCreateShareLink(projectId);
   const deactivateShareLink = useDeactivateShareLink(projectId);
+  const activateShareLink = useActivateShareLink(projectId);
+  const deleteShareLink = useDeleteShareLink(projectId);
 
   const baseUrl = useMemo(() => {
     if (typeof window !== 'undefined') {
@@ -28,6 +37,14 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
 
   const handleDeactivate = async (linkId: string) => {
     await deactivateShareLink.mutateAsync(linkId);
+  };
+
+  const handleActivate = async (linkId: string) => {
+    await activateShareLink.mutateAsync(linkId);
+  };
+
+  const handleDelete = async (linkId: string) => {
+    await deleteShareLink.mutateAsync(linkId);
   };
 
   const copyLink = async (link: ShareLink) => {
@@ -65,6 +82,11 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
           <div className="space-y-3">
             {links?.map((link) => {
               const shareUrl = `${baseUrl}/share/${link.token}`;
+              const isMutating =
+                deactivateShareLink.isPending ||
+                activateShareLink.isPending ||
+                deleteShareLink.isPending;
+
               return (
                 <div key={link.id} className="border-2 border-black p-3 bg-yellow-50">
                   <p className="text-xs text-muted-foreground mb-1">공유 URL</p>
@@ -74,21 +96,50 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
                     <span>•</span>
                     <span>만료: {new Date(link.expires_at).toLocaleString()}</span>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <Button type="button" size="sm" variant="outline" onClick={() => copyLink(link)}>
-                      복사
-                    </Button>
-                    {link.is_active && (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         type="button"
                         size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeactivate(link.id)}
-                        disabled={deactivateShareLink.isPending}
+                        variant="outline"
+                        onClick={() => copyLink(link)}
+                        disabled={isMutating}
                       >
-                        철회
+                        복사
                       </Button>
-                    )}
+                      {link.is_active ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDeactivate(link.id)}
+                          disabled={isMutating}
+                        >
+                          철회
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleActivate(link.id)}
+                          disabled={isMutating}
+                        >
+                          재활성화
+                        </Button>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleDelete(link.id)}
+                      disabled={isMutating}
+                      className="h-9 w-9 border-0 bg-transparent p-0 text-red-600 hover:bg-transparent hover:text-red-600"
+                      aria-label="공유 링크 삭제"
+                    >
+                      <Trash2 strokeWidth={2.8} />
+                    </Button>
                   </div>
                 </div>
               );

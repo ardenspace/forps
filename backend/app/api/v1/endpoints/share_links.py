@@ -52,7 +52,9 @@ async def list_share_links(
     return await share_link_service.get_project_share_links(db, project_id)
 
 
-@router.delete("/share-links/{share_link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.patch(
+    "/share-links/{share_link_id}/deactivate", response_model=ShareLinkResponse
+)
 async def deactivate_share_link(
     share_link_id: UUID,
     user: CurrentUser,
@@ -70,6 +72,52 @@ async def deactivate_share_link(
         )
 
     success = await share_link_service.deactivate_share_link(db, share_link_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Share link not found")
+
+    updated = await share_link_service.get_share_link_by_id(db, share_link_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    return updated
+
+
+@router.patch("/share-links/{share_link_id}/activate", response_model=ShareLinkResponse)
+async def activate_share_link(
+    share_link_id: UUID,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    share_link = await share_link_service.get_share_link_by_id(db, share_link_id)
+    if not share_link:
+        raise HTTPException(status_code=404, detail="Share link not found")
+
+    role = await get_effective_role(db, user.id, share_link.project_id)
+    if not can_manage(role):
+        raise HTTPException(
+            status_code=403, detail="Only owner can activate share links"
+        )
+
+    updated = await share_link_service.activate_share_link(db, share_link_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    return updated
+
+
+@router.delete("/share-links/{share_link_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_share_link(
+    share_link_id: UUID,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    share_link = await share_link_service.get_share_link_by_id(db, share_link_id)
+    if not share_link:
+        raise HTTPException(status_code=404, detail="Share link not found")
+
+    role = await get_effective_role(db, user.id, share_link.project_id)
+    if not can_manage(role):
+        raise HTTPException(status_code=403, detail="Only owner can delete share links")
+
+    success = await share_link_service.delete_share_link(db, share_link_id)
     if not success:
         raise HTTPException(status_code=404, detail="Share link not found")
 

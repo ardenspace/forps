@@ -88,7 +88,11 @@ export const api = {
     list: (projectId: string) => apiClient.get<ShareLink[]>(`/projects/${projectId}/share-links`),
     create: (projectId: string, data?: ShareLinkCreateRequest) =>
       apiClient.post<ShareLink>(`/projects/${projectId}/share-links`, data ?? {}),
-    deactivate: (shareLinkId: string) => apiClient.delete(`/share-links/${shareLinkId}`),
+    deactivate: (shareLinkId: string) =>
+      apiClient.patch<ShareLink>(`/share-links/${shareLinkId}/deactivate`),
+    activate: (shareLinkId: string) =>
+      apiClient.patch<ShareLink>(`/share-links/${shareLinkId}/activate`),
+    delete: (shareLinkId: string) => apiClient.delete(`/share-links/${shareLinkId}`),
   },
 
   tasks: {
