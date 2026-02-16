@@ -16,20 +16,3 @@ export interface WorkspaceCreate {
   slug: string;
   description?: string;
 }
-
-export interface WorkspaceMember {
-  id: string;
-  user_id: string;
-  role: WorkspaceRole;
-  created_at: string;
-  user: {
-    id: string;
-    email: string;
-    name: string;
-  };
-}
-
-export interface AddMemberRequest {
-  email: string;
-  role: WorkspaceRole;
-}

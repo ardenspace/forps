@@ -37,7 +37,11 @@ export function useAuth() {
     select: (response) => response.data,
   });
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.auth.logout();
+    } catch {
+    }
     storeLogout();
     queryClient.clear();
     navigate(ROUTES.LOGIN);

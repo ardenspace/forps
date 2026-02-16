@@ -21,6 +21,8 @@ async def create_share_link(
     token = secrets.token_urlsafe(32)
     expires_at = datetime.utcnow() + timedelta(days=30)
 
+    await deactivate_project_share_links(db, project_id)
+
     share_link = ShareLink(
         project_id=project_id,
         created_by=user_id,
@@ -50,7 +52,9 @@ async def get_share_link_by_token(db: AsyncSession, token: str) -> ShareLink | N
     return share_link
 
 
-async def get_project_share_links(db: AsyncSession, project_id: UUID) -> list[ShareLink]:
+async def get_project_share_links(
+    db: AsyncSession, project_id: UUID
+) -> list[ShareLink]:
     """프로젝트의 공유 링크 목록"""
     stmt = (
         select(ShareLink)
@@ -61,16 +65,73 @@ async def get_project_share_links(db: AsyncSession, project_id: UUID) -> list[Sh
     return list(result.scalars().all())
 
 
-async def deactivate_share_link(db: AsyncSession, share_link_id: UUID) -> bool:
-    """공유 링크 비활성화"""
+async def get_share_link_by_id(
+    db: AsyncSession, share_link_id: UUID
+) -> ShareLink | None:
     stmt = select(ShareLink).where(ShareLink.id == share_link_id)
     result = await db.execute(stmt)
-    share_link = result.scalar_one_or_none()
+    return result.scalar_one_or_none()
+
+
+async def deactivate_share_link(db: AsyncSession, share_link_id: UUID) -> bool:
+    """공유 링크 비활성화"""
+    share_link = await get_share_link_by_id(db, share_link_id)
 
     if not share_link:
         return False
 
+    if not share_link.is_active:
+        return True
+
     share_link.is_active = False
+    await db.commit()
+    return True
+
+
+async def deactivate_project_share_links(
+    db: AsyncSession,
+    project_id: UUID,
+    exclude_share_link_id: UUID | None = None,
+) -> None:
+    stmt = select(ShareLink).where(
+        ShareLink.project_id == project_id,
+        ShareLink.is_active == True,
+    )
+    result = await db.execute(stmt)
+    links = result.scalars().all()
+
+    for link in links:
+        if exclude_share_link_id and link.id == exclude_share_link_id:
+            continue
+        link.is_active = False
+
+
+async def activate_share_link(
+    db: AsyncSession, share_link_id: UUID
+) -> ShareLink | None:
+    share_link = await get_share_link_by_id(db, share_link_id)
+
+    if not share_link:
+        return None
+
+    await deactivate_project_share_links(
+        db,
+        share_link.project_id,
+        exclude_share_link_id=share_link.id,
+    )
+    share_link.is_active = True
+    await db.commit()
+    await db.refresh(share_link)
+    return share_link
+
+
+async def delete_share_link(db: AsyncSession, share_link_id: UUID) -> bool:
+    share_link = await get_share_link_by_id(db, share_link_id)
+
+    if not share_link:
+        return False
+
+    await db.delete(share_link)
     await db.commit()
     return True
 

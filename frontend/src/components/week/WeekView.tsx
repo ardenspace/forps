@@ -98,35 +98,35 @@ export function WeekView({ tasks, weekStart, onWeekChange, onTaskClick }: WeekVi
   return (
     <div>
       {/* Navigation bar */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           <button
             onClick={handlePrevWeek}
-            className="border-2 border-black font-bold px-3 py-1 text-sm hover:bg-yellow-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] bg-white"
+            className="border-2 border-black font-bold px-2.5 sm:px-3 py-1 text-xs sm:text-sm hover:bg-yellow-100 transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] bg-white whitespace-nowrap"
           >
             ← 이전
           </button>
           <button
             onClick={handleThisWeek}
-            className="border-2 border-black font-bold px-3 py-1 text-sm bg-black text-white hover:bg-yellow-400 hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            className="border-2 border-black font-bold px-2.5 sm:px-3 py-1 text-xs sm:text-sm bg-black text-white hover:bg-yellow-400 hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] whitespace-nowrap"
           >
             이번 주
           </button>
           <button
             onClick={handleNextWeek}
-            className="border-2 border-black font-bold px-3 py-1 text-sm hover:bg-yellow-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] bg-white"
+            className="border-2 border-black font-bold px-2.5 sm:px-3 py-1 text-xs sm:text-sm hover:bg-yellow-100 transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] bg-white whitespace-nowrap"
           >
             다음 →
           </button>
         </div>
-        <h3 className="font-black text-lg">
+        <h3 className="font-black text-sm sm:text-lg">
           {weekStart.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} -{' '}
           {weekEndDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
         </h3>
       </div>
 
       {/* Weekly rows grid */}
-      <div className="border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+      <div className="border-2 border-black shadow-[4px_4px_0px_0px_rgba(244,0,4,1)]">
         {weekDates.map((date, i) => {
           const key = toLocalDateKey(date);
           const dayTasks = tasksByDate.get(key) || [];
@@ -150,7 +150,7 @@ export function WeekView({ tasks, weekStart, onWeekChange, onTaskClick }: WeekVi
 
       {/* No-due-date section */}
       {noDateTasks.length > 0 && (
-        <div className="mt-4 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <div className="mt-4 border-2 border-black shadow-[4px_4px_0px_0px_rgba(244,0,4,1)]">
           <WeekRow
             date={null}
             label="마감일 없음"

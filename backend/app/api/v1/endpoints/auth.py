@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -24,3 +24,9 @@ async def login(data: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]
 @router.get("/me", response_model=UserResponse)
 async def me(current_user: CurrentUser):
     return current_user
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(current_user: CurrentUser):
+    _ = current_user
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

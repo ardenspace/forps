@@ -102,7 +102,7 @@ export function CustomSelect({
       {open && (
         <ul
           role="listbox"
-          className="absolute top-full left-0 right-0 z-50 mt-0 border-2 border-black border-t-0 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-48 overflow-y-auto"
+          className="absolute top-full left-0 right-0 z-50 mt-0 border-2 border-black border-t-0 bg-white shadow-[4px_4px_0px_0px_rgba(244,0,4,1)] max-h-48 overflow-y-auto"
         >
           {options.map((option) => (
             <li
