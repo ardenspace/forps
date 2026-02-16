@@ -9,10 +9,10 @@ export function BoardHeader({ projectName, onCreateTask }: BoardHeaderProps) {
   const { taskFilters, setTaskFilters } = useUIStore();
 
   return (
-    <div className="flex items-center justify-between mb-4">
-      <h2 className="font-black text-xl">{projectName}</h2>
-      <div className="flex items-center gap-3">
-        <label className="font-medium text-sm flex items-center gap-2 cursor-pointer">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+      <h2 className="font-black text-lg sm:text-xl break-words">{projectName}</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <label className="font-medium text-xs sm:text-sm flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             checked={taskFilters.mineOnly}
@@ -23,7 +23,7 @@ export function BoardHeader({ projectName, onCreateTask }: BoardHeaderProps) {
         </label>
         <button
           onClick={onCreateTask}
-          className="bg-black text-white border-2 border-black font-bold px-4 py-1.5 text-sm hover:bg-yellow-400 hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+          className="bg-black text-white border-2 border-black font-bold px-3 sm:px-4 py-1.5 text-xs sm:text-sm hover:bg-yellow-400 hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] w-full sm:w-auto"
         >
           새 태스크
         </button>

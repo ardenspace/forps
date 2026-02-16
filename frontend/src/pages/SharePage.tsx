@@ -83,21 +83,21 @@ export function SharePage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
-          <h1 className="text-xl font-bold">{data.project_name}</h1>
-          <p className="text-sm text-muted-foreground">공유된 프로젝트 (읽기 전용)</p>
+        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
+          <h1 className="text-lg sm:text-xl font-bold break-words">{data.project_name}</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">공유된 프로젝트 (읽기 전용)</p>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-6">
-        <div className="flex gap-4 overflow-x-auto pb-4">
+      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-3 sm:pb-4">
           {tasksByStatus.map((col) => (
             <div
               key={col.status}
-              className={`flex-1 min-w-[250px] rounded-lg p-3 ${statusColors[col.status]}`}
+              className={`flex-1 min-w-[220px] sm:min-w-[250px] rounded-lg p-2.5 sm:p-3 ${statusColors[col.status]}`}
             >
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-sm">{col.label}</h3>
+                <h3 className="font-semibold text-xs sm:text-sm">{col.label}</h3>
                 <span className="text-xs text-muted-foreground bg-white px-2 py-0.5 rounded">
                   {col.tasks.length}
                 </span>
@@ -123,13 +123,15 @@ export function SharePage() {
 function TaskCard({ task }: { task: SharedTask }) {
   return (
     <Card>
-      <CardContent className="p-3">
-        <h4 className="font-medium text-sm">{task.title}</h4>
+      <CardContent className="p-2.5 sm:p-3">
+        <h4 className="font-medium text-xs sm:text-sm break-words">{task.title}</h4>
         {task.assignee_name && (
-          <p className="text-xs text-muted-foreground mt-1">{task.assignee_name}</p>
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 break-words">
+            {task.assignee_name}
+          </p>
         )}
         {task.due_date && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[11px] sm:text-xs text-muted-foreground">
             {new Date(task.due_date).toLocaleDateString()}
           </p>
         )}

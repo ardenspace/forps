@@ -41,7 +41,7 @@ const statusOptions: { value: TaskStatus; label: string }[] = [
 
 const metaLabelClass = 'text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block';
 const metaInputClass =
-  'border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:bg-gray-100 disabled:cursor-not-allowed';
+  'border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] disabled:bg-gray-100 disabled:cursor-not-allowed';
 
 export function TaskModal(props: TaskModalProps) {
   const { members, isOpen, onClose } = props;
@@ -188,16 +188,16 @@ export function TaskModal(props: TaskModalProps) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 sm:p-4"
       onClick={handleBackdropClick}
     >
       <div
         ref={modalRef}
-        className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] w-full max-w-3xl"
+        className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] w-full max-w-3xl max-h-[92vh] overflow-y-auto"
       >
-        <div className="p-6 pt-6">
+        <div className="p-4 sm:p-6 pt-4 sm:pt-6">
           {/* 2-column body */}
-          <div className="flex gap-6">
+          <div className="flex flex-col md:flex-row gap-4 md:gap-6">
             {/* Left: title + description */}
             <div className="flex-1 flex flex-col gap-4 min-w-0">
               <input
@@ -205,7 +205,7 @@ export function TaskModal(props: TaskModalProps) {
                 onChange={(e) => setTitle(e.target.value)}
                 disabled={!canEdit || isSaving}
                 placeholder="태스크 제목"
-                className="border-0 border-b-2 border-black rounded-none w-full px-0 py-2 font-black text-xl focus:outline-none bg-transparent disabled:bg-transparent placeholder:text-gray-400"
+                className="border-0 border-b-2 border-black rounded-none w-full px-0 py-2 font-black text-lg sm:text-xl focus:outline-none bg-transparent disabled:bg-transparent placeholder:text-gray-400"
                 autoFocus={isCreateMode}
               />
 
@@ -222,7 +222,7 @@ export function TaskModal(props: TaskModalProps) {
             </div>
 
             {/* Right: metadata */}
-            <div className="w-56 flex-shrink-0 flex flex-col gap-4 border-l-2 border-black pl-6">
+            <div className="w-full md:w-56 flex-shrink-0 flex flex-col gap-4 border-t-2 md:border-t-0 md:border-l-2 border-black pt-4 md:pt-0 md:pl-6">
               <div>
                 <label className={metaLabelClass}>상태</label>
                 <CustomSelect
@@ -264,7 +264,7 @@ export function TaskModal(props: TaskModalProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between mt-6 pt-4 border-t-2 border-black">
+          <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t-2 border-black">
             <div>
               {canDelete && !isCreateMode && props.onDelete && task && (
                 <button
@@ -276,7 +276,7 @@ export function TaskModal(props: TaskModalProps) {
                       onClose();
                     }
                   }}
-                  className="bg-red-500 text-white border-2 border-black font-bold px-4 py-2 text-sm hover:bg-red-600 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
+                  className="bg-red-500 text-white border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-red-600 transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] disabled:opacity-50"
                 >
                   삭제
                 </button>
@@ -294,14 +294,14 @@ export function TaskModal(props: TaskModalProps) {
               )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto justify-end">
               {isCreateMode ? (
                 <>
                   <button
                     type="button"
                     onClick={handleClose}
                     disabled={isSaving}
-                    className="border-2 border-black font-bold px-4 py-2 text-sm hover:bg-yellow-100 transition-colors"
+                    className="border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-yellow-100 transition-colors flex-1 sm:flex-none"
                   >
                     취소
                   </button>
@@ -309,7 +309,7 @@ export function TaskModal(props: TaskModalProps) {
                     type="button"
                     onClick={handleCreate}
                     disabled={isSaving || !title.trim()}
-                    className="bg-black text-white border-2 border-black font-bold px-4 py-2 text-sm hover:bg-yellow-400 hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
+                    className="bg-black text-white border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-yellow-400 hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] disabled:opacity-50 flex-1 sm:flex-none"
                   >
                     생성
                   </button>
@@ -319,7 +319,7 @@ export function TaskModal(props: TaskModalProps) {
                   type="button"
                   onClick={handleClose}
                   disabled={isSaving}
-                  className="border-2 border-black font-bold px-4 py-2 text-sm hover:bg-yellow-100 transition-colors"
+                  className="border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-yellow-100 transition-colors w-full sm:w-auto"
                 >
                   닫기
                 </button>

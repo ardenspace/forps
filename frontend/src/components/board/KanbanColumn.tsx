@@ -18,7 +18,7 @@ const statusStyles: Record<TaskStatus, string> = {
 export function KanbanColumn({ status, title, tasks, onTaskClick }: KanbanColumnProps) {
   return (
     <div
-      className={`flex-1 min-w-[250px] border-2 border-black p-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${statusStyles[status]}`}
+      className={`flex-1 min-w-[220px] sm:min-w-[250px] border-2 border-black p-2.5 sm:p-3 shadow-[4px_4px_0px_0px_rgba(244,0,4,1)] ${statusStyles[status]}`}
     >
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-black text-sm uppercase tracking-wide">{title}</h3>

@@ -38,12 +38,12 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 w-full max-w-2xl max-h-[80vh] overflow-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
+      <div className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="font-black text-lg">공유 링크 관리</h2>
-            <p className="text-sm text-muted-foreground">{projectName}</p>
+            <h2 className="font-black text-base sm:text-lg">공유 링크 관리</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground break-words">{projectName}</p>
           </div>
           <Button type="button" variant="ghost" onClick={onClose}>닫기</Button>
         </div>
@@ -74,7 +74,7 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
                     <span>•</span>
                     <span>만료: {new Date(link.expires_at).toLocaleString()}</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Button type="button" size="sm" variant="outline" onClick={() => copyLink(link)}>
                       복사
                     </Button>

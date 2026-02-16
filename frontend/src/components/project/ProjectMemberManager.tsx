@@ -68,16 +68,16 @@ export function ProjectMemberManager({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 w-full max-w-2xl max-h-[80vh] overflow-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
+      <div className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-black text-lg">프로젝트 멤버 관리</h2>
+          <h2 className="font-black text-base sm:text-lg">프로젝트 멤버 관리</h2>
           <Button type="button" variant="ghost" onClick={onClose}>닫기</Button>
         </div>
 
         <form onSubmit={handleInvite} className="border-2 border-black p-3 mb-4 bg-yellow-50">
           <p className="font-bold text-sm mb-2">멤버 초대</p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <Input
               type="email"
               value={email}
@@ -88,13 +88,13 @@ export function ProjectMemberManager({
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as WorkspaceRole)}
-              className="h-10 border-2 border-black px-2"
+              className="h-10 border-2 border-black px-2 w-full sm:w-auto"
             >
               {roleOptions.map((option) => (
                 <option key={option} value={option}>{option}</option>
               ))}
             </select>
-            <Button type="submit" disabled={addMember.isPending}>
+            <Button type="submit" disabled={addMember.isPending} className="w-full sm:w-auto">
               {addMember.isPending ? '초대 중...' : '초대'}
             </Button>
           </div>
@@ -108,17 +108,17 @@ export function ProjectMemberManager({
             {members?.map((member) => (
               <div
                 key={member.id}
-                className="flex items-center justify-between border-2 border-black p-3"
+                className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-2 border-black p-3"
               >
                 <div>
                   <p className="font-medium text-sm">{member.user.name}</p>
                   <p className="text-xs text-muted-foreground">{member.user.email}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                   <select
                     value={member.role}
                     onChange={(e) => handleRoleChange(member.user_id, e.target.value as WorkspaceRole)}
-                    className="h-8 border-2 border-black px-2 text-xs"
+                    className="h-8 border-2 border-black px-2 text-xs flex-1 sm:flex-none"
                     disabled={member.user_id === currentUserId || updateRole.isPending}
                   >
                     {roleOptions.map((option) => (
@@ -131,6 +131,7 @@ export function ProjectMemberManager({
                     variant="destructive"
                     onClick={() => handleRemove(member.user_id, member.user.name)}
                     disabled={member.user_id === currentUserId || removeMember.isPending}
+                    className="flex-1 sm:flex-none"
                   >
                     제거
                   </Button>

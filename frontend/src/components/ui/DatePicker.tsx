@@ -116,7 +116,7 @@ export function DatePicker({
 
       {/* Calendar popup */}
       {open && (
-        <div className="absolute top-full left-0 z-50 mt-0 border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-3">
+        <div className="absolute top-full left-0 z-50 mt-0 border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-3">
           <DayPicker
             mode="single"
             selected={selectedDate}
