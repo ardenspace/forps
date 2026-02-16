@@ -59,10 +59,16 @@ bunx shadcn@latest add button
 bunx shadcn@latest add button card input label
 ```
 
-## 다음 단계
+## 구현 상태 (2026-02 기준)
 
-- [ ] 로그인/회원가입 페이지
-- [ ] 워크스페이스 선택 화면
-- [ ] 프로젝트 대시보드
-- [ ] 태스크 관리 (Table + Kanban 뷰)
-- [ ] API 연동 (Axios)
+- [x] 로그인/회원가입 페이지
+- [x] 프로젝트 대시보드
+- [x] Kanban 기반 태스크 관리
+- [x] Week 뷰 탭
+- [x] API 연동 (Axios)
+
+## 남은 주요 미구현 항목
+
+- [ ] Table 뷰
+- [ ] 공유 링크 생성/관리 UI
+- [ ] 워크스페이스 멤버 관리 UI 연결 (멤버 목록/초대 모달 노출)

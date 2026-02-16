@@ -2281,34 +2281,34 @@ git commit -m "feat: implement workspace member invite UI (owner only)"
 
 ## 체크포인트
 
-각 Phase 완료 후 검증:
+각 Phase 완료 후 검증 (2026-02 코드 기준으로 구현 확인된 항목 반영):
 
 ### Phase 1 완료 체크
 - [ ] `alembic upgrade head` 성공
-- [ ] `GET /workspaces` 응답 확인
-- [ ] `POST /workspaces` 생성 후 목록에 표시
-- [ ] `GET /workspaces/{id}/projects` 응답 확인
-- [ ] `GET /projects/{id}/tasks` 응답 확인
-- [ ] TaskEvent 생성/상태변경 시 기록 확인
-- [ ] `DELETE /tasks/{id}` Owner만 성공, Editor/Viewer는 403
-- [ ] `POST /workspaces/{id}/members` Owner만 성공
-- [ ] `GET /workspaces/{id}/members` 멤버 목록 확인
+- [x] `GET /workspaces` 엔드포인트 구현
+- [x] `POST /workspaces` 엔드포인트 구현
+- [x] `GET /workspaces/{id}/projects` 엔드포인트 구현
+- [x] `GET /projects/{id}/tasks` 엔드포인트 구현
+- [x] TaskEvent 생성/상태변경 기록 로직 구현
+- [x] `DELETE /tasks/{id}` Owner 권한 체크 로직 구현
+- [x] `POST /workspaces/{id}/members` Owner 권한 체크 로직 구현
+- [x] `GET /workspaces/{id}/members` 엔드포인트 구현
 
 ### Phase 2 완료 체크
-- [ ] 워크스페이스 선택 시 프로젝트 목록 표시
-- [ ] 프로젝트 선택 시 Kanban 보드 표시
-- [ ] 4컬럼(todo/doing/done/blocked) 렌더링
-- [ ] "내 태스크만" 토글 동작 (서버 필터링)
-- [ ] 새 태스크 생성 후 보드에 표시
-- [ ] Owner만 태스크 삭제 버튼 표시/동작
+- [x] 워크스페이스 선택 시 프로젝트 목록 표시
+- [x] 프로젝트 선택 시 Kanban 보드 표시
+- [x] 4컬럼(todo/doing/done/blocked) 렌더링
+- [x] "내 태스크만" 토글 동작 (서버 필터링)
+- [x] 새 태스크 생성 후 보드에 표시
+- [x] Owner만 태스크 삭제 버튼 표시/동작
 - [ ] Owner만 멤버 초대 UI 표시/동작
 
 ### Phase 3 완료 체크
 - [ ] Owner만 공유 링크 생성 가능
-- [ ] 공유 URL 접속 시 read-only 보드 표시
-- [ ] 철회된 토큰 접근 시 에러 표시
+- [x] 공유 URL 접속 시 read-only 보드 표시
+- [x] 철회된 토큰 접근 시 에러 표시
 
 ### Phase 4 완료 체크
-- [ ] Week 탭 전환 동작
-- [ ] due_date 기준 주간 그룹핑
+- [x] Week 탭 전환 동작
+- [x] due_date 기준 주간 그룹핑
 - [ ] "마감일 미지정" 그룹 표시
