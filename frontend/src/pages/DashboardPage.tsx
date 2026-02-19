@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkspaces } from '@/hooks/useWorkspaces';
 import { useProjects, useProjectMembers } from '@/hooks/useProjects';
-import { useTasks, useDeleteTask, useWeekTasks } from '@/hooks/useTasks';
+import { useTasks, useDeleteTask, useUpdateTask, useWeekTasks } from '@/hooks/useTasks';
+import { useSendDiscordSummary } from '@/hooks/useDiscord';
 import { useUIStore } from '@/stores/uiStore';
 import { Button } from '@/components/ui/button';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
@@ -57,6 +58,8 @@ export function DashboardPage() {
     mine_only: taskFilters.mineOnly,
   });
   const deleteTaskMutation = useDeleteTask();
+  const updateTaskMutation = useUpdateTask();
+  const discordMutation = useSendDiscordSummary(selectedWorkspaceId);
 
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
@@ -172,6 +175,26 @@ export function DashboardPage() {
             }}
           >
             <span>프로젝트 멤버</span>
+          </button>
+        )}
+
+        {currentWorkspace?.my_role === 'owner' && (
+          <button
+            className="text-xs sm:text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 px-2 py-1.5 rounded border-2 border-dashed border-muted-foreground hover:border-black hover:bg-purple-50 transition-all font-medium w-full md:w-full"
+            disabled={discordMutation.isPending}
+            onClick={() => {
+              discordMutation.mutate(undefined, {
+                onSuccess: () => alert('Discord 리포트가 전송되었습니다.'),
+                onError: (err) => {
+                  const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+                    ?? 'Discord 리포트 전송에 실패했습니다.';
+                  alert(message);
+                },
+              });
+              closeMobileSidebar();
+            }}
+          >
+            <span>{discordMutation.isPending ? '전송 중...' : 'Discord 리포트'}</span>
           </button>
         )}
       </div>
@@ -307,6 +330,10 @@ export function DashboardPage() {
                   <KanbanBoard
                     tasks={tasks || []}
                     onTaskClick={(task) => setSelectedTask(task)}
+                    onTaskStatusChange={(taskId, newStatus) => {
+                      updateTaskMutation.mutate({ taskId, data: { status: newStatus } });
+                    }}
+                    isDragDisabled={myRole === 'viewer'}
                   />
                 ) : (
                   <TaskTableView
