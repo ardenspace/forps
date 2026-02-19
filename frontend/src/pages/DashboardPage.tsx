@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkspaces } from '@/hooks/useWorkspaces';
 import { useProjects, useProjectMembers } from '@/hooks/useProjects';
-import { useTasks, useDeleteTask, useWeekTasks } from '@/hooks/useTasks';
+import { useTasks, useDeleteTask, useUpdateTask, useWeekTasks } from '@/hooks/useTasks';
+import { useSendDiscordSummary } from '@/hooks/useDiscord';
 import { useUIStore } from '@/stores/uiStore';
 import { Button } from '@/components/ui/button';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { BoardHeader } from '@/components/board/BoardHeader';
 import { TaskModal } from '@/components/board/TaskModal';
 import { CreateProjectModal } from '@/components/workspace/CreateProjectModal';
+import { ProjectItem } from '@/components/sidebar/ProjectItem';
 import { ProjectMemberManager } from '@/components/project/ProjectMemberManager';
 import { WeekView, getMonday } from '@/components/week/WeekView';
 import { TaskTableView } from '@/components/table/TaskTableView';
@@ -56,6 +58,8 @@ export function DashboardPage() {
     mine_only: taskFilters.mineOnly,
   });
   const deleteTaskMutation = useDeleteTask();
+  const updateTaskMutation = useUpdateTask();
+  const discordMutation = useSendDiscordSummary(selectedWorkspaceId);
 
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
@@ -131,23 +135,15 @@ export function DashboardPage() {
         <p className="text-xs text-muted-foreground mb-1 font-medium">프로젝트</p>
 
         <ul className="flex flex-col gap-1 overflow-y-auto overflow-x-hidden pb-1 flex-1 min-h-0">
-          {projects?.map((project) => {
-            const isSelected = project.id === selectedProjectId;
-            return (
-              <li key={project.id}>
-                <button
-                  className={`w-full md:w-full whitespace-nowrap md:whitespace-normal text-left px-2 py-1.5 rounded text-xs sm:text-sm font-medium transition-all border-2 ${
-                    isSelected
-                      ? 'bg-yellow-400 border-black shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] font-bold'
-                      : 'border-transparent text-muted-foreground hover:bg-yellow-50 hover:border-black hover:text-foreground'
-                  }`}
-                  onClick={() => handleProjectSelect(project.id)}
-                >
-                  <span className="truncate block">{project.name}</span>
-                </button>
-              </li>
-            );
-          })}
+          {projects?.map((project) => (
+            <ProjectItem
+              key={project.id}
+              project={project}
+              isSelected={project.id === selectedProjectId}
+              workspaceId={selectedWorkspaceId!}
+              onSelect={handleProjectSelect}
+            />
+          ))}
           {!projects?.length && (
             <li>
               <p className="text-xs text-muted-foreground px-2 py-1.5 italic">프로젝트 없음</p>
@@ -179,6 +175,26 @@ export function DashboardPage() {
             }}
           >
             <span>프로젝트 멤버</span>
+          </button>
+        )}
+
+        {currentWorkspace?.my_role === 'owner' && (
+          <button
+            className="text-xs sm:text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 px-2 py-1.5 rounded border-2 border-dashed border-muted-foreground hover:border-black hover:bg-purple-50 transition-all font-medium w-full md:w-full"
+            disabled={discordMutation.isPending}
+            onClick={() => {
+              discordMutation.mutate(undefined, {
+                onSuccess: () => alert('Discord 리포트가 전송되었습니다.'),
+                onError: (err) => {
+                  const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+                    ?? 'Discord 리포트 전송에 실패했습니다.';
+                  alert(message);
+                },
+              });
+              closeMobileSidebar();
+            }}
+          >
+            <span>{discordMutation.isPending ? '전송 중...' : 'Discord 리포트'}</span>
           </button>
         )}
       </div>
@@ -314,6 +330,10 @@ export function DashboardPage() {
                   <KanbanBoard
                     tasks={tasks || []}
                     onTaskClick={(task) => setSelectedTask(task)}
+                    onTaskStatusChange={(taskId, newStatus) => {
+                      updateTaskMutation.mutate({ taskId, data: { status: newStatus } });
+                    }}
+                    isDragDisabled={myRole === 'viewer'}
                   />
                 ) : (
                   <TaskTableView

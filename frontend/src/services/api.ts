@@ -95,6 +95,11 @@ export const api = {
     delete: (shareLinkId: string) => apiClient.delete(`/share-links/${shareLinkId}`),
   },
 
+  discord: {
+    sendSummary: (workspaceId: string) =>
+      apiClient.post<{ message: string }>(`/workspaces/${workspaceId}/discord-summary`),
+  },
+
   tasks: {
     list: (projectId: string, filters?: { mine_only?: boolean; status?: string }) =>
       apiClient.get<Task[]>(`/projects/${projectId}/tasks`, { params: filters }),

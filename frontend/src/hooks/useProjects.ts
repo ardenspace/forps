@@ -28,6 +28,27 @@ export function useCreateProject(workspaceId: string) {
   });
 }
 
+export function useUpdateProject(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, data }: { projectId: string; data: { name?: string; description?: string } }) =>
+      api.projects.update(workspaceId, projectId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'projects'] });
+    },
+  });
+}
+
+export function useDeleteProject(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) => api.projects.delete(workspaceId, projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'projects'] });
+    },
+  });
+}
+
 export function useProjectMembers(projectId: string | null) {
   return useQuery({
     queryKey: ['projects', projectId, 'members'],
