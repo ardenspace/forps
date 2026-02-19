@@ -32,7 +32,7 @@ async def send_discord_summary(
     if not settings.discord_webhook_url:
         raise HTTPException(status_code=400, detail="Discord webhook URL is not configured")
 
-    summary = await build_weekly_summary(workspace_id, db)
+    summary = await build_weekly_summary(workspace_id, db, sender_name=user.name)
     await send_webhook(summary)
 
     return {"message": "Discord summary sent successfully"}

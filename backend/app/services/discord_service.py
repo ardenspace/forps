@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -9,6 +11,12 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.models.project import Project
 from app.models.task import Task, TaskStatus
+
+logger = logging.getLogger(__name__)
+
+# 스케줄 설정: 월요일(0) 오전 9시 (UTC 기준 00시 = KST 09시)
+SCHEDULE_WEEKDAY = 0  # Monday
+SCHEDULE_HOUR = 0     # UTC 0시 = KST 9시
 
 
 async def send_webhook(content: str) -> None:
@@ -24,15 +32,40 @@ async def send_webhook(content: str) -> None:
         response.raise_for_status()
 
 
-async def build_weekly_summary(workspace_id: UUID, db: AsyncSession) -> str:
-    """지난 7일간 done/blocked 태스크를 프로젝트별로 집계"""
+STATUS_LABELS: dict[TaskStatus, tuple[str, str]] = {
+    TaskStatus.DONE: ("✅", "Done"),
+    TaskStatus.DOING: ("🔨", "Doing"),
+    TaskStatus.TODO: ("📋", "To Do"),
+    TaskStatus.BLOCKED: ("🚫", "Blocked"),
+}
+
+
+def _format_task(task: Task) -> str:
+    """태스크 블록 포맷: 메타 + 제목(bold) + 내용"""
+    assignee = f"@{task.assignee.name}" if task.assignee else "@미지정"
+    due = f", 마감 {task.due_date.strftime('%m/%d')}" if task.due_date else ""
+    desc_raw = task.description.strip() if task.description else ""
+    body = "\n> " + desc_raw.replace("\n", "\n> ") if desc_raw else ""
+    return f"> {assignee}{due}\n> **{task.title}**{body}"
+
+
+def _format_overdue_task(task: Task) -> str:
+    """마감 초과 태스크 포맷"""
+    assignee = f"@{task.assignee.name}" if task.assignee else "@미지정"
+    status_label = STATUS_LABELS.get(task.status, ("", str(task.status.value)))[1]
+    due = task.due_date.strftime("%m/%d") if task.due_date else ""
+    return f"> {assignee}, 마감 {due}, 현재 {status_label}\n> **{task.title}**"
+
+
+async def build_weekly_summary(workspace_id: UUID, db: AsyncSession, sender_name: str = "") -> str:
+    """워크스페이스 주간 리포트 생성"""
     now = datetime.utcnow()
+    today = datetime(now.year, now.month, now.day)  # midnight datetime for safe comparison
     week_ago = now - timedelta(days=7)
 
     date_from = week_ago.strftime("%m/%d")
     date_to = now.strftime("%m/%d")
 
-    # 워크스페이스의 모든 프로젝트와 해당 태스크 조회
     stmt = (
         select(Project)
         .where(Project.workspace_id == workspace_id)
@@ -44,45 +77,104 @@ async def build_weekly_summary(workspace_id: UUID, db: AsyncSession) -> str:
     projects = list(result.scalars().all())
 
     lines: list[str] = []
-    lines.append(f"## forps 주간 리포트 ({date_from} ~ {date_to})")
+    sender_tag = f"[**{sender_name}**] " if sender_name else ""
+    lines.append(f"📊 {sender_tag}**forps 주간 리포트** ({date_from} ~ {date_to})")
     lines.append("")
 
-    has_content = False
+    has_project_content = False
+    all_overdue: list[tuple[str, Task]] = []  # (project_name, task)
 
     for project in projects:
-        # 지난 7일 내 업데이트된 done/blocked 태스크만 필터
-        done_tasks = [
-            t for t in project.tasks
-            if t.status == TaskStatus.DONE and t.updated_at >= week_ago
-        ]
-        blocked_tasks = [
-            t for t in project.tasks
-            if t.status == TaskStatus.BLOCKED and t.updated_at >= week_ago
-        ]
+        # 지난 7일 내 업데이트된 태스크를 상태별로 분류
+        status_groups: dict[TaskStatus, list[Task]] = {
+            TaskStatus.DONE: [],
+            TaskStatus.DOING: [],
+            TaskStatus.TODO: [],
+            TaskStatus.BLOCKED: [],
+        }
 
-        if not done_tasks and not blocked_tasks:
+        for task in project.tasks:
+            if task.updated_at >= week_ago:
+                status_groups[task.status].append(task)
+
+        # 마감 초과 태스크 수집 (TODO/DOING 상태인데 마감일 지남)
+        for task in project.tasks:
+            if (
+                task.due_date
+                and task.due_date < today
+                and task.status in (TaskStatus.TODO, TaskStatus.DOING)
+            ):
+                all_overdue.append((project.name, task))
+
+        has_tasks = any(tasks for tasks in status_groups.values())
+        if not has_tasks:
             continue
 
-        has_content = True
+        has_project_content = True
         lines.append(f"**[{project.name}]**")
 
-        if done_tasks:
-            task_list = ", ".join(
-                f"{t.title}(@{t.assignee.name if t.assignee else '미지정'})"
-                for t in done_tasks
-            )
-            lines.append(f"> Done ({len(done_tasks)}): {task_list}")
+        for status in (TaskStatus.DONE, TaskStatus.DOING, TaskStatus.TODO, TaskStatus.BLOCKED):
+            tasks = status_groups[status]
+            if not tasks:
+                continue
+            emoji, label = STATUS_LABELS[status]
+            lines.append(f"{emoji} {label} ({len(tasks)})")
+            for t in tasks:
+                lines.append(_format_task(t))
+            lines.append("")
 
-        if blocked_tasks:
-            task_list = ", ".join(
-                f"{t.title}(@{t.assignee.name if t.assignee else '미지정'})"
-                for t in blocked_tasks
-            )
-            lines.append(f"> Blocked ({len(blocked_tasks)}): {task_list}")
-
+    # 마감 초과 경고 섹션
+    if all_overdue:
+        lines.append("⚠️ **마감 초과 태스크**")
+        for project_name, task in all_overdue:
+            lines.append(f"> [{project_name}]")
+            lines.append(_format_overdue_task(task))
         lines.append("")
 
-    if not has_content:
-        lines.append("_지난 7일간 완료/차단된 태스크가 없습니다._")
+    if not has_project_content and not all_overdue:
+        lines.append("_지난 7일간 업데이트된 태스크가 없습니다._")
 
     return "\n".join(lines)
+
+
+def _seconds_until_next_schedule() -> float:
+    """다음 월요일 오전 9시(KST)까지 남은 초 계산"""
+    now = datetime.utcnow()
+    days_ahead = SCHEDULE_WEEKDAY - now.weekday()
+    if days_ahead < 0 or (days_ahead == 0 and now.hour >= SCHEDULE_HOUR):
+        days_ahead += 7
+
+    next_run = now.replace(hour=SCHEDULE_HOUR, minute=0, second=0, microsecond=0) + timedelta(days=days_ahead)
+    return (next_run - now).total_seconds()
+
+
+async def _send_all_workspace_summaries() -> None:
+    """모든 워크스페이스에 대해 주간 리포트 전송"""
+    if not settings.discord_webhook_url:
+        return
+
+    from app.database import AsyncSessionLocal
+    from app.models.workspace import Workspace
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Workspace))
+        workspaces = list(result.scalars().all())
+
+        for workspace in workspaces:
+            try:
+                summary = await build_weekly_summary(workspace.id, db, sender_name="자동 리포트")
+                await send_webhook(summary)
+            except Exception:
+                logger.exception("Failed to send weekly summary for workspace %s", workspace.id)
+
+
+async def start_weekly_scheduler() -> None:
+    """매주 월요일 오전 9시(KST)에 주간 리포트 자동 전송"""
+    while True:
+        wait_seconds = _seconds_until_next_schedule()
+        logger.info("Next weekly report in %.0f seconds", wait_seconds)
+        await asyncio.sleep(wait_seconds)
+        try:
+            await _send_all_workspace_summaries()
+        except Exception:
+            logger.exception("Weekly scheduler error")
