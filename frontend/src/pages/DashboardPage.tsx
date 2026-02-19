@@ -9,6 +9,7 @@ import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { BoardHeader } from '@/components/board/BoardHeader';
 import { TaskModal } from '@/components/board/TaskModal';
 import { CreateProjectModal } from '@/components/workspace/CreateProjectModal';
+import { ProjectItem } from '@/components/sidebar/ProjectItem';
 import { ProjectMemberManager } from '@/components/project/ProjectMemberManager';
 import { WeekView, getMonday } from '@/components/week/WeekView';
 import { TaskTableView } from '@/components/table/TaskTableView';
@@ -131,23 +132,15 @@ export function DashboardPage() {
         <p className="text-xs text-muted-foreground mb-1 font-medium">프로젝트</p>
 
         <ul className="flex flex-col gap-1 overflow-y-auto overflow-x-hidden pb-1 flex-1 min-h-0">
-          {projects?.map((project) => {
-            const isSelected = project.id === selectedProjectId;
-            return (
-              <li key={project.id}>
-                <button
-                  className={`w-full md:w-full whitespace-nowrap md:whitespace-normal text-left px-2 py-1.5 rounded text-xs sm:text-sm font-medium transition-all border-2 ${
-                    isSelected
-                      ? 'bg-yellow-400 border-black shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] font-bold'
-                      : 'border-transparent text-muted-foreground hover:bg-yellow-50 hover:border-black hover:text-foreground'
-                  }`}
-                  onClick={() => handleProjectSelect(project.id)}
-                >
-                  <span className="truncate block">{project.name}</span>
-                </button>
-              </li>
-            );
-          })}
+          {projects?.map((project) => (
+            <ProjectItem
+              key={project.id}
+              project={project}
+              isSelected={project.id === selectedProjectId}
+              workspaceId={selectedWorkspaceId!}
+              onSelect={handleProjectSelect}
+            />
+          ))}
           {!projects?.length && (
             <li>
               <p className="text-xs text-muted-foreground px-2 py-1.5 italic">프로젝트 없음</p>
