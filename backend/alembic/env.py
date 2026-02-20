@@ -11,7 +11,7 @@ from alembic import context
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings
-from app.database import Base, get_async_url
+from app.database import Base, get_async_url, get_connect_args
 from app.models import (
     User,
     Workspace,
@@ -59,6 +59,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=get_connect_args(settings.database_url),
     )
 
     async with connectable.connect() as connection:
