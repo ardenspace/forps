@@ -10,6 +10,13 @@ export function useProjects(workspaceId: string | null) {
   });
 }
 
+export function useMyProjects() {
+  return useQuery({
+    queryKey: ['projects', 'mine'],
+    queryFn: () => api.projects.listMine().then((r) => r.data),
+  });
+}
+
 export function useProject(id: string | null) {
   return useQuery({
     queryKey: ['projects', id],
@@ -24,6 +31,7 @@ export function useCreateProject(workspaceId: string) {
     mutationFn: (data: ProjectCreate) => api.projects.create(workspaceId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects', 'mine'] });
     },
   });
 }
@@ -35,6 +43,7 @@ export function useUpdateProject(workspaceId: string) {
       api.projects.update(workspaceId, projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects', 'mine'] });
     },
   });
 }
@@ -45,6 +54,7 @@ export function useDeleteProject(workspaceId: string) {
     mutationFn: (projectId: string) => api.projects.delete(workspaceId, projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects', 'mine'] });
     },
   });
 }
