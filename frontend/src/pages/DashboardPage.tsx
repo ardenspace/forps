@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkspaces } from '@/hooks/useWorkspaces';
-import { useProjects, useProjectMembers } from '@/hooks/useProjects';
+import { useMyProjects, useProjectMembers } from '@/hooks/useProjects';
 import { useTasks, useDeleteTask, useUpdateTask, useWeekTasks } from '@/hooks/useTasks';
 import { useSendDiscordSummary } from '@/hooks/useDiscord';
 import { useUIStore } from '@/stores/uiStore';
@@ -52,7 +52,7 @@ export function DashboardPage() {
 
   const currentWorkspace = workspaces?.find((ws) => ws.id === selectedWorkspaceId);
 
-  const { data: projects } = useProjects(selectedWorkspaceId);
+  const { data: projects } = useMyProjects();
   const { data: members } = useProjectMembers(selectedProjectId);
   const { data: tasks, isLoading } = useTasks(selectedProjectId, {
     mine_only: taskFilters.mineOnly,
@@ -205,7 +205,7 @@ export function DashboardPage() {
               key={project.id}
               project={project}
               isSelected={project.id === selectedProjectId}
-              workspaceId={selectedWorkspaceId!}
+              workspaceId={project.workspace_id}
               onSelect={handleProjectSelect}
             />
           ))}

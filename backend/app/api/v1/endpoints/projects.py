@@ -29,6 +29,14 @@ async def list_projects(
     return await project_service.get_workspace_projects(db, workspace_id, user.id)
 
 
+@router.get("/projects", response_model=list[ProjectResponse])
+async def list_my_projects(
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    return await project_service.get_user_projects(db, user.id)
+
+
 @router.post(
     "/workspaces/{workspace_id}/projects",
     response_model=ProjectResponse,

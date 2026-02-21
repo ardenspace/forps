@@ -70,6 +70,39 @@ async def get_workspace_projects(
     return project_list
 
 
+async def get_user_projects(
+    db: AsyncSession,
+    user_id: UUID,
+) -> list[dict]:
+    stmt = (
+        select(Project)
+        .join(ProjectMember, ProjectMember.project_id == Project.id)
+        .where(ProjectMember.user_id == user_id)
+    )
+    result = await db.execute(stmt)
+    projects = result.scalars().all()
+
+    project_list = []
+    for project in projects:
+        role = await get_effective_role(db, user_id, project.id)
+        if not role:
+            continue
+
+        count_stmt = select(func.count()).where(Task.project_id == project.id)
+        count_result = await db.execute(count_stmt)
+        task_count = count_result.scalar()
+
+        project_list.append(
+            {
+                **project.__dict__,
+                "my_role": role,
+                "task_count": task_count,
+            }
+        )
+
+    return project_list
+
+
 async def get_project(db: AsyncSession, project_id: UUID) -> Project | None:
     stmt = select(Project).where(Project.id == project_id)
     result = await db.execute(stmt)

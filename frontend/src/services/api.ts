@@ -66,6 +66,7 @@ export const api = {
   },
 
   projects: {
+    listMine: () => apiClient.get<Project[]>('/projects'),
     list: (workspaceId: string) =>
       apiClient.get<Project[]>(`/workspaces/${workspaceId}/projects`),
     create: (workspaceId: string, data: ProjectCreate) =>
