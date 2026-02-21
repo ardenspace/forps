@@ -12,6 +12,7 @@ class ProjectCreate(BaseModel):
 class ProjectUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    discord_webhook_url: str | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -19,6 +20,7 @@ class ProjectResponse(BaseModel):
     workspace_id: UUID
     name: str
     description: str | None
+    discord_webhook_url: str | None = None
     my_role: WorkspaceRole
     task_count: int
     created_at: datetime

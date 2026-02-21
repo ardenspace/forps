@@ -6,6 +6,7 @@ export interface Project {
   workspace_id: string;
   name: string;
   description: string | null;
+  discord_webhook_url: string | null;
   my_role: WorkspaceRole;
   task_count: number;
   created_at: string;

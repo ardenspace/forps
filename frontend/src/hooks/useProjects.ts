@@ -39,7 +39,7 @@ export function useCreateProject(workspaceId: string) {
 export function useUpdateProject(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ projectId, data }: { projectId: string; data: { name?: string; description?: string } }) =>
+    mutationFn: ({ projectId, data }: { projectId: string; data: { name?: string; description?: string; discord_webhook_url?: string | null } }) =>
       api.projects.update(workspaceId, projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'projects'] });

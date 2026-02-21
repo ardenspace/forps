@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
 from app.models.project import Project
 from app.models.task import Task, TaskStatus
 
@@ -19,14 +18,11 @@ SCHEDULE_WEEKDAY = 0  # Monday
 SCHEDULE_HOUR = 0     # UTC 0시 = KST 9시
 
 
-async def send_webhook(content: str) -> None:
+async def send_webhook(content: str, webhook_url: str) -> None:
     """Discord webhook URL로 메시지 전송"""
-    if not settings.discord_webhook_url:
-        raise ValueError("DISCORD_WEBHOOK_URL is not configured")
-
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            settings.discord_webhook_url,
+            webhook_url,
             json={"content": content},
         )
         response.raise_for_status()
@@ -57,10 +53,10 @@ def _format_overdue_task(task: Task) -> str:
     return f"> {assignee}, 마감 {due}, 현재 {status_label}\n> **{task.title}**"
 
 
-async def build_weekly_summary(workspace_id: UUID, db: AsyncSession, sender_name: str = "") -> str:
-    """워크스페이스 주간 리포트 생성"""
+async def build_project_summary(project_id: UUID, db: AsyncSession, sender_name: str = "") -> str:
+    """프로젝트 주간 리포트 생성"""
     now = datetime.utcnow()
-    today = datetime(now.year, now.month, now.day)  # midnight datetime for safe comparison
+    today = datetime(now.year, now.month, now.day)
     week_ago = now - timedelta(days=7)
 
     date_from = week_ago.strftime("%m/%d")
@@ -68,51 +64,47 @@ async def build_weekly_summary(workspace_id: UUID, db: AsyncSession, sender_name
 
     stmt = (
         select(Project)
-        .where(Project.workspace_id == workspace_id)
+        .where(Project.id == project_id)
         .options(
             selectinload(Project.tasks).selectinload(Task.assignee),
         )
     )
     result = await db.execute(stmt)
-    projects = list(result.scalars().all())
+    project = result.scalar_one_or_none()
+
+    if not project:
+        return "_프로젝트를 찾을 수 없습니다._"
 
     lines: list[str] = []
     sender_tag = f"[**{sender_name}**] " if sender_name else ""
     lines.append(f"📊 {sender_tag}**forps 주간 리포트** ({date_from} ~ {date_to})")
     lines.append("")
+    lines.append(f"**[{project.name}]**")
 
-    has_project_content = False
-    all_overdue: list[tuple[str, Task]] = []  # (project_name, task)
+    # 지난 7일 내 업데이트된 태스크를 상태별로 분류
+    status_groups: dict[TaskStatus, list[Task]] = {
+        TaskStatus.DONE: [],
+        TaskStatus.DOING: [],
+        TaskStatus.TODO: [],
+        TaskStatus.BLOCKED: [],
+    }
 
-    for project in projects:
-        # 지난 7일 내 업데이트된 태스크를 상태별로 분류
-        status_groups: dict[TaskStatus, list[Task]] = {
-            TaskStatus.DONE: [],
-            TaskStatus.DOING: [],
-            TaskStatus.TODO: [],
-            TaskStatus.BLOCKED: [],
-        }
+    overdue: list[Task] = []
 
-        for task in project.tasks:
-            if task.updated_at >= week_ago:
-                status_groups[task.status].append(task)
+    for task in project.tasks:
+        if task.updated_at >= week_ago:
+            status_groups[task.status].append(task)
 
-        # 마감 초과 태스크 수집 (TODO/DOING 상태인데 마감일 지남)
-        for task in project.tasks:
-            if (
-                task.due_date
-                and task.due_date < today
-                and task.status in (TaskStatus.TODO, TaskStatus.DOING)
-            ):
-                all_overdue.append((project.name, task))
+        if (
+            task.due_date
+            and task.due_date < today
+            and task.status in (TaskStatus.TODO, TaskStatus.DOING)
+        ):
+            overdue.append(task)
 
-        has_tasks = any(tasks for tasks in status_groups.values())
-        if not has_tasks:
-            continue
+    has_tasks = any(tasks for tasks in status_groups.values())
 
-        has_project_content = True
-        lines.append(f"**[{project.name}]**")
-
+    if has_tasks:
         for status in (TaskStatus.DONE, TaskStatus.DOING, TaskStatus.TODO, TaskStatus.BLOCKED):
             tasks = status_groups[status]
             if not tasks:
@@ -123,15 +115,13 @@ async def build_weekly_summary(workspace_id: UUID, db: AsyncSession, sender_name
                 lines.append(_format_task(t))
             lines.append("")
 
-    # 마감 초과 경고 섹션
-    if all_overdue:
+    if overdue:
         lines.append("⚠️ **마감 초과 태스크**")
-        for project_name, task in all_overdue:
-            lines.append(f"> [{project_name}]")
+        for task in overdue:
             lines.append(_format_overdue_task(task))
         lines.append("")
 
-    if not has_project_content and not all_overdue:
+    if not has_tasks and not overdue:
         lines.append("_지난 7일간 업데이트된 태스크가 없습니다._")
 
     return "\n".join(lines)
@@ -148,24 +138,21 @@ def _seconds_until_next_schedule() -> float:
     return (next_run - now).total_seconds()
 
 
-async def _send_all_workspace_summaries() -> None:
-    """모든 워크스페이스에 대해 주간 리포트 전송"""
-    if not settings.discord_webhook_url:
-        return
-
+async def _send_all_project_summaries() -> None:
+    """webhook URL이 설정된 프로젝트에 대해 주간 리포트 전송"""
     from app.database import AsyncSessionLocal
-    from app.models.workspace import Workspace
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Workspace))
-        workspaces = list(result.scalars().all())
+        stmt = select(Project).where(Project.discord_webhook_url.isnot(None))
+        result = await db.execute(stmt)
+        projects = list(result.scalars().all())
 
-        for workspace in workspaces:
+        for project in projects:
             try:
-                summary = await build_weekly_summary(workspace.id, db, sender_name="자동 리포트")
-                await send_webhook(summary)
+                summary = await build_project_summary(project.id, db, sender_name="자동 리포트")
+                await send_webhook(summary, project.discord_webhook_url)
             except Exception:
-                logger.exception("Failed to send weekly summary for workspace %s", workspace.id)
+                logger.exception("Failed to send weekly summary for project %s", project.id)
 
 
 async def start_weekly_scheduler() -> None:
@@ -175,6 +162,6 @@ async def start_weekly_scheduler() -> None:
         logger.info("Next weekly report in %.0f seconds", wait_seconds)
         await asyncio.sleep(wait_seconds)
         try:
-            await _send_all_workspace_summaries()
+            await _send_all_project_summaries()
         except Exception:
             logger.exception("Weekly scheduler error")

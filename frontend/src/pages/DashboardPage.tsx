@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkspaces } from '@/hooks/useWorkspaces';
-import { useMyProjects, useProjectMembers } from '@/hooks/useProjects';
+import { useMyProjects, useProjectMembers, useUpdateProject } from '@/hooks/useProjects';
 import { useTasks, useDeleteTask, useUpdateTask, useWeekTasks } from '@/hooks/useTasks';
 import { useSendDiscordSummary } from '@/hooks/useDiscord';
 import { useUIStore } from '@/stores/uiStore';
@@ -15,6 +15,7 @@ import { ProjectMemberManager } from '@/components/project/ProjectMemberManager'
 import { WeekView, getMonday } from '@/components/week/WeekView';
 import { TaskTableView } from '@/components/table/TaskTableView';
 import { ShareLinkManager } from '@/components/share/ShareLinkManager';
+import { AlertModal } from '@/components/ui/AlertModal';
 import type { Task } from '@/types/task';
 
 type ViewMode = 'board' | 'table' | 'week';
@@ -53,13 +54,35 @@ export function DashboardPage() {
   const currentWorkspace = workspaces?.find((ws) => ws.id === selectedWorkspaceId);
 
   const { data: projects } = useMyProjects();
+  const selectedProject = projects?.find((p) => p.id === selectedProjectId);
+  const myRole = selectedProject?.my_role ?? 'viewer';
+
   const { data: members } = useProjectMembers(selectedProjectId);
   const { data: tasks, isLoading } = useTasks(selectedProjectId, {
     mine_only: taskFilters.mineOnly,
   });
   const deleteTaskMutation = useDeleteTask();
   const updateTaskMutation = useUpdateTask();
-  const discordMutation = useSendDiscordSummary(selectedWorkspaceId);
+  const discordMutation = useSendDiscordSummary(selectedProjectId);
+  const updateProjectMutation = useUpdateProject(selectedProject?.workspace_id ?? '');
+
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [isWebhookEditing, setWebhookEditing] = useState(false);
+
+  useEffect(() => {
+    setWebhookUrl(selectedProject?.discord_webhook_url ?? '');
+    setWebhookEditing(false);
+  }, [selectedProject?.id, selectedProject?.discord_webhook_url]);
+
+  const handleSaveWebhookUrl = () => {
+    if (!selectedProjectId) return;
+    updateProjectMutation.mutate(
+      { projectId: selectedProjectId, data: { discord_webhook_url: webhookUrl || null } },
+      {
+        onSuccess: () => setWebhookEditing(false),
+      }
+    );
+  };
 
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
@@ -69,6 +92,7 @@ export function DashboardPage() {
   const [isShareManagerOpen, setShareManagerOpen] = useState(false);
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const swipeStartXRef = useRef<number | null>(null);
   const swipeStartYRef = useRef<number | null>(null);
   const isSwipeTrackingRef = useRef(false);
@@ -77,9 +101,6 @@ export function DashboardPage() {
   const { data: weekTasks, isLoading: isWeekLoading } = useWeekTasks(
     viewMode === 'week' ? weekStartStr : null
   );
-
-  const selectedProject = projects?.find((p) => p.id === selectedProjectId);
-  const myRole = selectedProject?.my_role ?? 'viewer';
 
   useEffect(() => {
     if (!projects) {
@@ -243,24 +264,50 @@ export function DashboardPage() {
           </button>
         )}
 
-        {currentWorkspace?.my_role === 'owner' && (
-          <button
-            className="text-xs sm:text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 px-2 py-1.5 rounded border-2 border-dashed border-muted-foreground hover:border-black hover:bg-purple-50 transition-all font-medium w-full md:w-full"
-            disabled={discordMutation.isPending}
-            onClick={() => {
-              discordMutation.mutate(undefined, {
-                onSuccess: () => alert('Discord 리포트가 전송되었습니다.'),
-                onError: (err) => {
-                  const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-                    ?? 'Discord 리포트 전송에 실패했습니다.';
-                  alert(message);
-                },
-              });
-              closeMobileSidebar();
-            }}
-          >
-            <span>{discordMutation.isPending ? '전송 중...' : 'Discord 리포트'}</span>
-          </button>
+        {selectedProjectId && myRole === 'owner' && (
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground">
+                Discord Webhook URL
+              </label>
+              <input
+                type="url"
+                placeholder="https://discord.com/api/webhooks/..."
+                value={webhookUrl}
+                onChange={(e) => {
+                  setWebhookUrl(e.target.value);
+                  setWebhookEditing(true);
+                }}
+                className="w-full text-xs px-2 py-1.5 border-2 border-black/20 rounded focus:border-black focus:outline-none bg-white"
+              />
+              {isWebhookEditing && (
+                <button
+                  className="text-xs font-bold px-2 py-1 border-2 border-black bg-yellow-300 hover:bg-yellow-400 rounded transition-colors w-full"
+                  disabled={updateProjectMutation.isPending}
+                  onClick={handleSaveWebhookUrl}
+                >
+                  {updateProjectMutation.isPending ? '저장 중...' : '저장'}
+                </button>
+              )}
+            </div>
+            <button
+              className="text-xs sm:text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 px-2 py-1.5 rounded border-2 border-dashed border-muted-foreground hover:border-black hover:bg-purple-50 transition-all font-medium w-full md:w-full"
+              disabled={discordMutation.isPending}
+              onClick={() => {
+                discordMutation.mutate(undefined, {
+                  onSuccess: () => setAlertMessage('Discord 리포트가 전송되었습니다.'),
+                  onError: (err) => {
+                    const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+                      ?? 'Discord 리포트 전송에 실패했습니다.';
+                    setAlertMessage(message);
+                  },
+                });
+                closeMobileSidebar();
+              }}
+            >
+              <span>{discordMutation.isPending ? '전송 중...' : 'Discord 리포트'}</span>
+            </button>
+          </div>
         )}
       </div>
     </>
@@ -472,6 +519,13 @@ export function DashboardPage() {
         isOpen={!!selectedTask}
         onClose={() => setSelectedTask(null)}
         onDelete={handleDeleteTask}
+      />
+
+      <AlertModal
+        isOpen={!!alertMessage}
+        title="알림"
+        description={alertMessage ?? undefined}
+        onClose={() => setAlertMessage(null)}
       />
     </div>
   );

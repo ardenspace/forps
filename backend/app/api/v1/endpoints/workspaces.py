@@ -55,11 +55,7 @@ async def get_workspace(
         raise HTTPException(status_code=403, detail="Not a member of this workspace")
 
     member_count = await workspace_service.get_workspace_member_count(db, workspace_id)
-    return {
-        **workspace.__dict__,
-        "my_role": membership.role,
-        "member_count": member_count,
-    }
+    return {**workspace.__dict__, "my_role": membership.role, "member_count": member_count}
 
 
 @router.patch("/{workspace_id}", response_model=WorkspaceResponse)

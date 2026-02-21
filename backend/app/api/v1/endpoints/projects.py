@@ -81,11 +81,10 @@ async def get_workspace_project(
         raise HTTPException(status_code=403, detail="Permission denied")
 
     task_count = await project_service.get_project_task_count(db, project_id)
-    return {
-        **project.__dict__,
-        "my_role": role,
-        "task_count": task_count,
-    }
+    resp = {**project.__dict__, "my_role": role, "task_count": task_count}
+    if role != WorkspaceRole.OWNER:
+        resp["discord_webhook_url"] = None
+    return resp
 
 
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
@@ -104,11 +103,10 @@ async def get_project(
         raise HTTPException(status_code=403, detail="Permission denied")
 
     task_count = await project_service.get_project_task_count(db, project_id)
-    return {
-        **project.__dict__,
-        "my_role": role,
-        "task_count": task_count,
-    }
+    resp = {**project.__dict__, "my_role": role, "task_count": task_count}
+    if role != WorkspaceRole.OWNER:
+        resp["discord_webhook_url"] = None
+    return resp
 
 
 @router.patch(
@@ -132,11 +130,10 @@ async def update_project(
 
     updated_project = await project_service.update_project(db, project, data)
     task_count = await project_service.get_project_task_count(db, project_id)
-    return {
-        **updated_project.__dict__,
-        "my_role": role,
-        "task_count": task_count,
-    }
+    resp = {**updated_project.__dict__, "my_role": role, "task_count": task_count}
+    if role != WorkspaceRole.OWNER:
+        resp["discord_webhook_url"] = None
+    return resp
 
 
 @router.delete(

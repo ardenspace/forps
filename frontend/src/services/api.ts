@@ -71,7 +71,7 @@ export const api = {
       apiClient.get<Project[]>(`/workspaces/${workspaceId}/projects`),
     create: (workspaceId: string, data: ProjectCreate) =>
       apiClient.post<Project>(`/workspaces/${workspaceId}/projects`, data),
-    update: (workspaceId: string, projectId: string, data: { name?: string; description?: string }) =>
+    update: (workspaceId: string, projectId: string, data: { name?: string; description?: string; discord_webhook_url?: string | null }) =>
       apiClient.patch<Project>(`/workspaces/${workspaceId}/projects/${projectId}`, data),
     delete: (workspaceId: string, projectId: string) =>
       apiClient.delete(`/workspaces/${workspaceId}/projects/${projectId}`),
@@ -97,8 +97,8 @@ export const api = {
   },
 
   discord: {
-    sendSummary: (workspaceId: string) =>
-      apiClient.post<{ message: string }>(`/workspaces/${workspaceId}/discord-summary`),
+    sendSummary: (projectId: string) =>
+      apiClient.post<{ message: string }>(`/projects/${projectId}/discord-summary`),
   },
 
   tasks: {

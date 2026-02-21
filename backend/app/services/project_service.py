@@ -59,13 +59,10 @@ async def get_workspace_projects(
         count_result = await db.execute(count_stmt)
         task_count = count_result.scalar()
 
-        project_list.append(
-            {
-                **project.__dict__,
-                "my_role": role,
-                "task_count": task_count,
-            }
-        )
+        proj_dict = {**project.__dict__, "my_role": role, "task_count": task_count}
+        if role != WorkspaceRole.OWNER:
+            proj_dict["discord_webhook_url"] = None
+        project_list.append(proj_dict)
 
     return project_list
 
@@ -92,13 +89,10 @@ async def get_user_projects(
         count_result = await db.execute(count_stmt)
         task_count = count_result.scalar()
 
-        project_list.append(
-            {
-                **project.__dict__,
-                "my_role": role,
-                "task_count": task_count,
-            }
-        )
+        proj_dict = {**project.__dict__, "my_role": role, "task_count": task_count}
+        if role != WorkspaceRole.OWNER:
+            proj_dict["discord_webhook_url"] = None
+        project_list.append(proj_dict)
 
     return project_list
 

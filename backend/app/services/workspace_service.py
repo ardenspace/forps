@@ -49,13 +49,8 @@ async def get_user_workspaces(db: AsyncSession, user_id: UUID) -> list[dict]:
         count_result = await db.execute(count_stmt)
         member_count = count_result.scalar()
 
-        workspaces.append(
-            {
-                **workspace.__dict__,
-                "my_role": role,
-                "member_count": member_count,
-            }
-        )
+        ws_dict = {**workspace.__dict__, "my_role": role, "member_count": member_count}
+        workspaces.append(ws_dict)
 
     return workspaces
 

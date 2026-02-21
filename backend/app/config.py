@@ -24,8 +24,6 @@ class Settings(BaseSettings):
     # CORS
     allowed_origins: str = "http://localhost:5173"
 
-    # Discord
-    discord_webhook_url: str | None = None
 
 
 settings = Settings()

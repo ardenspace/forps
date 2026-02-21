@@ -16,6 +16,7 @@ class Project(Base):
 
     name: Mapped[str]
     description: Mapped[str | None]
+    discord_webhook_url: Mapped[str | None] = mapped_column(default=None)
 
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
