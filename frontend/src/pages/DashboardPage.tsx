@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkspaces } from '@/hooks/useWorkspaces';
 import { useProjects, useProjectMembers } from '@/hooks/useProjects';
@@ -69,6 +69,9 @@ export function DashboardPage() {
   const [isShareManagerOpen, setShareManagerOpen] = useState(false);
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const swipeStartXRef = useRef<number | null>(null);
+  const swipeStartYRef = useRef<number | null>(null);
+  const isSwipeTrackingRef = useRef(false);
 
   const weekStartStr = weekStart.toISOString().split('T')[0];
   const { data: weekTasks, isLoading: isWeekLoading } = useWeekTasks(
@@ -115,6 +118,68 @@ export function DashboardPage() {
       mediaQuery.removeEventListener('change', handleChange);
     };
   }, []);
+
+  useEffect(() => {
+    const EDGE_START_PX = 64;
+    const OPEN_THRESHOLD_PX = 72;
+    const MAX_VERTICAL_DRIFT_PX = 64;
+
+    const resetSwipe = () => {
+      swipeStartXRef.current = null;
+      swipeStartYRef.current = null;
+      isSwipeTrackingRef.current = false;
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (window.matchMedia('(min-width: 768px)').matches || isMobileSidebarOpen) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      if (!touch || touch.clientX > EDGE_START_PX) {
+        resetSwipe();
+        return;
+      }
+
+      swipeStartXRef.current = touch.clientX;
+      swipeStartYRef.current = touch.clientY;
+      isSwipeTrackingRef.current = true;
+    };
+
+    const handleTouchEnd = (event: TouchEvent) => {
+      if (!isSwipeTrackingRef.current) {
+        return;
+      }
+
+      const startX = swipeStartXRef.current;
+      const startY = swipeStartYRef.current;
+      const touch = event.changedTouches[0];
+
+      if (startX === null || startY === null || !touch) {
+        resetSwipe();
+        return;
+      }
+
+      const deltaX = touch.clientX - startX;
+      const deltaY = Math.abs(touch.clientY - startY);
+
+      if (deltaX >= OPEN_THRESHOLD_PX && deltaY <= MAX_VERTICAL_DRIFT_PX) {
+        setMobileSidebarOpen(true);
+      }
+
+      resetSwipe();
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', resetSwipe, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', resetSwipe);
+    };
+  }, [isMobileSidebarOpen]);
 
   const closeMobileSidebar = () => {
     setMobileSidebarOpen(false);
