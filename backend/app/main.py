@@ -40,6 +40,7 @@ async def root():
     return {"message": "forps API is running"}
 
 
+@app.head("/health")
 @app.get("/health")
 async def health():
     return {"status": "ok"}
