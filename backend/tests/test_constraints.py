@@ -77,7 +77,7 @@ async def test_log_event_unknown_version_sha_accepted(async_session):
     await async_session.execute(text(
         "INSERT INTO log_events(id, project_id, level, message, logger_name, "
         "version_sha, environment, hostname, emitted_at, received_at) "
-        "VALUES (:id, :pid, 'info', 'm', 'l', 'unknown', 'dev', 'h', now(), now())"
+        "VALUES (:id, :pid, 'INFO', 'm', 'l', 'unknown', 'dev', 'h', now(), now())"
     ), {"id": uuid.uuid4(), "pid": project_id})
     await async_session.commit()
 
@@ -101,7 +101,7 @@ async def test_log_event_short_version_sha_rejected(async_session):
         await async_session.execute(text(
             "INSERT INTO log_events(id, project_id, level, message, logger_name, "
             "version_sha, environment, hostname, emitted_at, received_at) "
-            "VALUES (:id, :pid, 'info', 'm', 'l', 'abc1234', 'dev', 'h', now(), now())"
+            "VALUES (:id, :pid, 'INFO', 'm', 'l', 'abc1234', 'dev', 'h', now(), now())"
         ), {"id": uuid.uuid4(), "pid": project_id})
         await async_session.commit()
 
@@ -123,25 +123,25 @@ async def test_task_external_id_unique_per_project(async_session):
     # NULL 두 개 — 통과
     await async_session.execute(text(
         "INSERT INTO tasks(id, project_id, title, status, source, created_at, updated_at) "
-        "VALUES (:id, :pid, 't1', 'TODO'::taskstatus, 'manual', now(), now())"
+        "VALUES (:id, :pid, 't1', 'TODO'::taskstatus, 'MANUAL', now(), now())"
     ), {"id": uuid.uuid4(), "pid": project_id})
     await async_session.execute(text(
         "INSERT INTO tasks(id, project_id, title, status, source, created_at, updated_at) "
-        "VALUES (:id, :pid, 't2', 'TODO'::taskstatus, 'manual', now(), now())"
+        "VALUES (:id, :pid, 't2', 'TODO'::taskstatus, 'MANUAL', now(), now())"
     ), {"id": uuid.uuid4(), "pid": project_id})
     await async_session.commit()
 
     # 같은 external_id "task-001" 두 개 → reject
     await async_session.execute(text(
         "INSERT INTO tasks(id, project_id, title, status, source, external_id, created_at, updated_at) "
-        "VALUES (:id, :pid, 't3', 'TODO'::taskstatus, 'manual', 'task-001', now(), now())"
+        "VALUES (:id, :pid, 't3', 'TODO'::taskstatus, 'MANUAL', 'task-001', now(), now())"
     ), {"id": uuid.uuid4(), "pid": project_id})
     await async_session.commit()
 
     with pytest.raises(IntegrityError):
         await async_session.execute(text(
             "INSERT INTO tasks(id, project_id, title, status, source, external_id, created_at, updated_at) "
-            "VALUES (:id, :pid, 't4', 'TODO'::taskstatus, 'manual', 'task-001', now(), now())"
+            "VALUES (:id, :pid, 't4', 'TODO'::taskstatus, 'MANUAL', 'task-001', now(), now())"
         ), {"id": uuid.uuid4(), "pid": project_id})
         await async_session.commit()
 

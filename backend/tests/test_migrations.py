@@ -104,7 +104,7 @@ def test_existing_data_preserved_after_phase1(patched_alembic_config):
             (seeded["task_id"],),
         )
         row = cur.fetchone()
-        assert row[0] == "manual", "기존 task 의 source 가 manual default 가 아님"
+        assert row[0] == "MANUAL", "기존 task 의 source 가 MANUAL default 가 아님"
         assert row[1] is None
         assert row[2] is None
         assert row[3] is None
@@ -166,5 +166,5 @@ def test_task_event_action_existing_values_preserved_after_phase1(
     conn.close()
     # 기존 6값은 UPPER_CASE 로 생성되어 있음 (initial migration 참고)
     assert {"CREATED", "UPDATED", "STATUS_CHANGED", "ASSIGNED", "COMMENTED", "DELETED"} <= labels
-    # Phase 1 에서 ADD VALUE 한 4값은 lower_case
-    assert {"synced_from_plan", "checked_by_commit", "unchecked_by_commit", "archived_from_plan"} <= labels
+    # Phase 1 에서 ADD VALUE 한 4값도 UPPER_CASE 로 통일
+    assert {"SYNCED_FROM_PLAN", "CHECKED_BY_COMMIT", "UNCHECKED_BY_COMMIT", "ARCHIVED_FROM_PLAN"} <= labels

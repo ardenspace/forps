@@ -32,10 +32,10 @@ def upgrade() -> None:
     # autocommit 블록으로 분리.
     with op.get_context().autocommit_block():
         for value in [
-            "synced_from_plan",
-            "checked_by_commit",
-            "unchecked_by_commit",
-            "archived_from_plan",
+            "SYNCED_FROM_PLAN",
+            "CHECKED_BY_COMMIT",
+            "UNCHECKED_BY_COMMIT",
+            "ARCHIVED_FROM_PLAN",
         ]:
             op.execute(f"ALTER TYPE taskeventaction ADD VALUE IF NOT EXISTS '{value}'")
 
@@ -46,18 +46,18 @@ def upgrade() -> None:
 
     # ── 2) 신규 enum 타입 ───────────────────────────────────────────
     task_source = postgresql.ENUM(
-        "manual", "synced_from_plan", name="tasksource", create_type=False
+        "MANUAL", "SYNCED_FROM_PLAN", name="tasksource", create_type=False
     )
     task_source.create(op.get_bind(), checkfirst=True)
 
     log_level = postgresql.ENUM(
-        "debug", "info", "warning", "error", "critical",
+        "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL",
         name="loglevel", create_type=False,
     )
     log_level.create(op.get_bind(), checkfirst=True)
 
     error_group_status = postgresql.ENUM(
-        "open", "resolved", "ignored", "regressed",
+        "OPEN", "RESOLVED", "IGNORED", "REGRESSED",
         name="errorgroupstatus", create_type=False,
     )
     error_group_status.create(op.get_bind(), checkfirst=True)
@@ -91,9 +91,9 @@ def upgrade() -> None:
         "tasks",
         sa.Column(
             "source",
-            postgresql.ENUM("manual", "synced_from_plan", name="tasksource", create_type=False),
+            postgresql.ENUM("MANUAL", "SYNCED_FROM_PLAN", name="tasksource", create_type=False),
             nullable=False,
-            server_default="manual",
+            server_default="MANUAL",
         ),
     )
     op.add_column("tasks", sa.Column("external_id", sa.String(), nullable=True))
@@ -212,11 +212,11 @@ def upgrade() -> None:
         sa.Column(
             "status",
             postgresql.ENUM(
-                "open", "resolved", "ignored", "regressed",
+                "OPEN", "RESOLVED", "IGNORED", "REGRESSED",
                 name="errorgroupstatus", create_type=False,
             ),
             nullable=False,
-            server_default="open",
+            server_default="OPEN",
         ),
         sa.Column("resolved_at", sa.DateTime(), nullable=True),
         sa.Column("resolved_by_user_id", sa.UUID(), nullable=True),
@@ -297,13 +297,13 @@ def upgrade() -> None:
         "log_events",
         ["project_id", "id"],
         postgresql_where=sa.text(
-            "level IN ('error','critical') AND fingerprinted_at IS NULL"
+            "level IN ('ERROR','CRITICAL') AND fingerprinted_at IS NULL"
         ),
     )
     op.execute("""
         CREATE INDEX idx_log_message_trgm
           ON log_events USING gin (message gin_trgm_ops)
-          WHERE level IN ('warning','error','critical')
+          WHERE level IN ('WARNING','ERROR','CRITICAL')
     """)
 
     # ── 13) 30일치 daily partition pre-create ─────────────────────
