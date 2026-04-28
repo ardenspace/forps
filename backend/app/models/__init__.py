@@ -7,6 +7,7 @@ from app.models.task_event import TaskEvent
 from app.models.handoff import Handoff
 from app.models.git_push_event import GitPushEvent
 from app.models.log_ingest_token import LogIngestToken
+from app.models.rate_limit_window import RateLimitWindow
 
 __all__ = [
     "User",
@@ -21,4 +22,5 @@ __all__ = [
     "Handoff",
     "GitPushEvent",
     "LogIngestToken",
+    "RateLimitWindow",
 ]
