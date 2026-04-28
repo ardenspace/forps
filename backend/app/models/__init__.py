@@ -5,6 +5,7 @@ from app.models.task import Task, Comment
 from app.models.share_link import ShareLink
 from app.models.task_event import TaskEvent
 from app.models.handoff import Handoff
+from app.models.git_push_event import GitPushEvent
 
 __all__ = [
     "User",
@@ -17,4 +18,5 @@ __all__ = [
     "ShareLink",
     "TaskEvent",
     "Handoff",
+    "GitPushEvent",
 ]
