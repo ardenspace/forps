@@ -1,4 +1,3 @@
-import pytest
 import psycopg
 from sqlalchemy import text
 
@@ -18,14 +17,17 @@ def test_alembic_upgrade_head(upgraded_db):
         rows = conn.execute(
             "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
         ).fetchall()
+        actual_tables = {row[0] for row in rows}
 
-    actual_tables = {row[0] for row in rows}
+        missing = expected_tables - actual_tables
+        assert not missing, f"Missing tables after upgrade head: {missing}"
 
-    missing = expected_tables - actual_tables
-    assert not missing, f"Missing tables after upgrade head: {missing}"
+        row = conn.execute("SELECT version_num FROM alembic_version").fetchone()
+        assert row is not None and row[0], (
+            "alembic_version row missing — upgrade did not actually run"
+        )
 
 
-@pytest.mark.asyncio
 async def test_async_session(async_session):
     """Verify async SQLAlchemy session works against the migrated DB."""
     result = await async_session.execute(text("SELECT 1"))

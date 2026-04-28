@@ -1,3 +1,13 @@
+"""Phase 1 테스트 인프라.
+
+fixture chain:
+  postgres_container (session) → fresh_db (function: CREATE/DROP DB)
+    → alembic_config → upgraded_db (alembic upgrade head + monkey-patch settings)
+      → async_session (asyncpg AsyncSession)
+
+Per-test fresh DB; teardown terminates connections then DROPs. Not pytest-xdist safe.
+"""
+
 import os
 import uuid
 
@@ -31,6 +41,10 @@ def postgres_container():
 def _admin_dsn(pg: PostgresContainer) -> str:
     """Return a psycopg (sync) DSN pointing at the container's default DB."""
     raw = pg.get_connection_url()  # postgresql+psycopg2://...
+    assert raw.startswith("postgresql+psycopg2://"), (
+        f"testcontainers returned unexpected URL prefix: {raw!r}. "
+        "If testcontainers changed the driver, update _admin_dsn accordingly."
+    )
     return raw.replace("postgresql+psycopg2://", "postgresql://")
 
 
