@@ -9,6 +9,7 @@ from app.models.git_push_event import GitPushEvent
 from app.models.log_ingest_token import LogIngestToken
 from app.models.rate_limit_window import RateLimitWindow
 from app.models.error_group import ErrorGroup, ErrorGroupStatus
+from app.models.log_event import LogEvent, LogLevel
 
 __all__ = [
     "User",
@@ -26,4 +27,6 @@ __all__ = [
     "RateLimitWindow",
     "ErrorGroup",
     "ErrorGroupStatus",
+    "LogEvent",
+    "LogLevel",
 ]
