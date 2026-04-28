@@ -22,6 +22,13 @@ from app.models import (
     Comment,
     ShareLink,
     TaskEvent,
+    # Phase 1
+    Handoff,
+    GitPushEvent,
+    LogIngestToken,
+    RateLimitWindow,
+    ErrorGroup,
+    LogEvent,
 )
 
 config = context.config

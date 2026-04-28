@@ -176,3 +176,37 @@ async def test_handoff_unique_project_commit(async_session):
             "VALUES (:id, :pid, 'feat', 'b', :sha, now(), now())"
         ), {"id": uuid.uuid4(), "pid": project_id, "sha": sha})
         await async_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_orm_roundtrip_with_phase1_enum(async_session):
+    """ORM INSERT/SELECT 가 Phase 1 enum 매핑 정확.
+
+    SQLAlchemy enum default = NAME (대문자) 사용. DB enum 도 대문자.
+    Python enum 의 .value 가 소문자여도 ORM 매핑 시 NAME 으로 직렬화/역직렬화.
+    """
+    from app.models.task import Task, TaskSource
+    workspace_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    await async_session.execute(text(
+        "INSERT INTO workspaces(id, name, slug, created_at, updated_at) "
+        "VALUES (:id, 'w', 'sorm', now(), now())"
+    ), {"id": workspace_id})
+    await async_session.execute(text(
+        "INSERT INTO projects(id, workspace_id, name, created_at, updated_at) "
+        "VALUES (:id, :ws, 'p', now(), now())"
+    ), {"id": project_id, "ws": workspace_id})
+    await async_session.commit()
+
+    task = Task(
+        project_id=project_id,
+        title="orm-roundtrip",
+        source=TaskSource.SYNCED_FROM_PLAN,
+    )
+    async_session.add(task)
+    await async_session.commit()
+    await async_session.refresh(task)
+
+    assert task.source == TaskSource.SYNCED_FROM_PLAN, (
+        f"ORM round-trip 실패: source={task.source!r}"
+    )
