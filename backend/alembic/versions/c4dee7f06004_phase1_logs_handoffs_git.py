@@ -39,6 +39,11 @@ def upgrade() -> None:
         ]:
             op.execute(f"ALTER TYPE taskeventaction ADD VALUE IF NOT EXISTS '{value}'")
 
+    # 실패 복구 노트: 위 블록은 트랜잭션 외부에서 실행되므로 이후 블록이
+    # 실패해도 enum 4값은 DB에 영구적으로 남는다. IF NOT EXISTS 가드 덕에
+    # 재실행 안전하며, 잔존 값 자체는 기존 row 에 영향 없음 (PostgreSQL 은
+    # ALTER TYPE DROP VALUE 미지원이라 downgrade 에서도 제거 불가).
+
     # ── 2) 신규 enum 타입 ───────────────────────────────────────────
     task_source = postgresql.ENUM(
         "manual", "synced_from_plan", name="tasksource", create_type=False
@@ -74,6 +79,11 @@ def upgrade() -> None:
     op.add_column("projects", sa.Column("last_synced_commit_sha", sa.String(), nullable=True))
     op.add_column(
         "projects", sa.Column("webhook_secret_encrypted", sa.LargeBinary(), nullable=True)
+    )
+    op.create_check_constraint(
+        "ck_project_last_synced_commit_sha_format",
+        "projects",
+        "last_synced_commit_sha IS NULL OR last_synced_commit_sha ~ '^[0-9a-f]{40}$'",
     )
 
     # ── 4) Task 4 컬럼 + UNIQUE 부분 인덱스 + CHECK 제약 ──────────

@@ -26,6 +26,11 @@ class LogEvent(Base):
     SQLAlchemy 측은 일반 테이블처럼 매핑 (parent table).
     version_sha 는 40자 hex full 또는 'unknown' (CHECK 제약 alembic).
     fingerprint / fingerprinted_at 은 ERROR↑ 이벤트만 BackgroundTask 가 채움.
+
+    DDL 측 실제 PK 는 (id, received_at) — PostgreSQL partition key 가 PK 에
+    포함되어야 함. ORM 측은 id 단일 PK 로 매핑 (UUID 라 lookup 가능),
+    Session.get(LogEvent, uuid) 는 cross-partition scan 발생 — 성능 필요 시
+    received_at 명시 필터 사용.
     """
 
     __tablename__ = "log_events"
