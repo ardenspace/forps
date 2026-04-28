@@ -1,5 +1,57 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-04-27
+
+- [x] 두 설계서 + 어제 handoff 파일 git 커밋 (forps `7f7f692`)
+- [x] 두 설계서 교차 일관성 보강 — Plan 에이전트 독립 리뷰 후 4개 warning 패치
+  - [x] error-log §5.4 wire format 명세 추가 (요청 헤더 + JSON 본문)
+  - [x] error-log §4.2 archived task의 git 컨텍스트 join 정책 명시
+  - [x] task-automation `commit_sha`/`last_commit_sha` 40자 hex full 계약 명시 + Decision Log 항목 (Phase 1 alembic CHECK 제약 대상)
+  - [x] task-automation §13 Open Q #6 — Brief single-flight lock workers=1 가정 + 다중 워커 승격 경로
+- [x] **Phase 0 완료 (app-chak 레포)** — PR #1 머지
+  - [x] `CLAUDE.md` `## forps 연동 규칙` 섹션
+  - [x] `PLAN.md` 초안 (첫 마스터 태스크 = forps 연동 자체, 5/2~5/3 기획 회의 후 추가)
+  - [x] `handoffs/README.md` + 본 브랜치 handoff
+  - [x] `Dockerfile` + `docker-compose.yml` `APP_VERSION_SHA` build arg 주입
+  - [x] `backend/app/utils/forps_log_handler.py` — `PIIFilter` + `ForpsHandler` (배치 큐 / gzip / Bearer / 5xx exponential backoff / 4xx silent drop / 큐 한도 1000건·5MB / `X-Forps-Dropped-Since-Last` 헤더 / atexit 5초)
+  - [x] `configure_logging()` 확장 + `main.py` 에서 settings 의 모든 비밀 키를 PIIFilter `exact_secrets` 로 전달
+  - [x] 단위 테스트 27개, 전체 backend 127/127 통과 회귀 없음
+
+### 마지막 커밋
+
+- forps: `7f7f692 docs: 에러 로그 설계서 + 두 설계서 교차 일관성 보강` (origin/main)
+- app-chak: PR #1 머지 — `feat: forps 에러 로그 핸들러 + 연동 인프라 (Phase 0)` (origin/main)
+
+### 다음 (Phase 1 — forps 본체 alembic 마이그레이션)
+
+- [ ] 신규 테이블 모델
+  - [ ] `LogEvent` (PostgreSQL 일별 range partition + DROP PARTITION GC)
+  - [ ] `ErrorGroup` (status enum: OPEN/RESOLVED/IGNORED/REGRESSED)
+  - [ ] `LogIngestToken` (`<key_id>.<secret>` 포맷, bcrypt secret_hash)
+  - [ ] `RateLimitWindow` (PostgreSQL UPSERT 기반)
+  - [ ] `Handoff` (project_id, branch, commit_sha UNIQUE)
+  - [ ] `GitPushEvent`
+- [ ] 기존 모델 확장
+  - [ ] `Task` 4 필드 추가: `source`, `external_id`, `last_commit_sha`, `archived_at`
+  - [ ] `Project` Git-aware 필드 추가 (`repo_url`, `handoff_dir`, `last_synced_commit_sha`, `webhook_secret_encrypted`)
+  - [ ] `external_id` UNIQUE 부분 인덱스
+- [ ] CHECK 제약: `commit_sha ~ '^[0-9a-f]{40}$' OR commit_sha IS NULL` (Decision Log 2026-04-26 Rev2)
+- [ ] 마이그레이션 회귀 테스트 (CRITICAL — 기존 데이터 무손실)
+
+### 블로커
+
+없음
+
+### 메모 (2026-04-27 추가)
+
+- **archived task join 정책 (PR 리뷰 결정)**: `Task.archived_at IS NOT NULL` row 도 LogEvent git 컨텍스트 join 에 포함, UI 에서 `(archived)` 배지 — Phase 4 GitContextPanel 구현 시 반영.
+- **app-chak self-hosted runner Docker 이슈**: `~/.docker/config.json` 의 `credsStore: "desktop"` 가 비대화형 launchd 세션에서 keychain unlock 실패. 제거 + URL inline `x-access-token:$GITHUB_TOKEN` 으로 우회. forps 본체도 self-hosted runner 가면 동일 함정 — 운영 노트 참고.
+- **forps_log_handler `exact_secrets` 패턴**: app-chak 은 `JWT_SECRET_KEY` + Google/Kakao/OpenWeather/Solar/Places API 키 6종을 통째로 PIIFilter 에 넣음. forps 본체도 동일 패턴 적용 권고.
+- **forps 측 ingest endpoint** (`/api/v1/log-ingest`) 미구현 상태 — app-chak 은 `FORPS_LOG_ENDPOINT` 비워둬서 핸들러 자동 비활성. Phase 2 진입 후 e2e 검증.
+- **2026-05-02~03 주말 확장 기획 회의** — 회의 후 app-chak `PLAN.md` 에 마스터 태스크 추가, forps 측에서 sync 동작 실제 테스트 가능.
+
+---
+
 ## 2026-04-26
 
 - [x] AI 태스크 자동화 설계서 v2 (`docs/superpowers/specs/2026-04-26-ai-task-automation-design.md`)
