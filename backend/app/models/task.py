@@ -35,6 +35,16 @@ class Task(Base):
 
     due_date: Mapped[date | None]
 
+    # Phase 1 — task-automation 설계서 §4.1
+    source: Mapped[TaskSource] = mapped_column(default=TaskSource.MANUAL)
+    external_id: Mapped[str | None] = mapped_column(default=None)
+    last_commit_sha: Mapped[str | None] = mapped_column(default=None)
+    archived_at: Mapped[datetime | None] = mapped_column(default=None)
+
+    def __init__(self, **kwargs: object) -> None:
+        kwargs.setdefault("source", TaskSource.MANUAL)
+        super().__init__(**kwargs)
+
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
 
