@@ -18,6 +18,20 @@ class Project(Base):
     description: Mapped[str | None]
     discord_webhook_url: Mapped[str | None] = mapped_column(default=None)
 
+    # Phase 1 — task-automation 설계서 §4.1
+    git_repo_url: Mapped[str | None] = mapped_column(default=None)
+    git_default_branch: Mapped[str] = mapped_column(default="main")
+    plan_path: Mapped[str] = mapped_column(default="PLAN.md")
+    handoff_dir: Mapped[str] = mapped_column(default="handoffs/")
+    last_synced_commit_sha: Mapped[str | None] = mapped_column(default=None)
+    webhook_secret_encrypted: Mapped[bytes | None] = mapped_column(default=None)
+
+    def __init__(self, **kwargs: object) -> None:
+        kwargs.setdefault("git_default_branch", "main")
+        kwargs.setdefault("plan_path", "PLAN.md")
+        kwargs.setdefault("handoff_dir", "handoffs/")
+        super().__init__(**kwargs)
+
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
 
