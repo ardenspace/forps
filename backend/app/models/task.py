@@ -15,6 +15,11 @@ class TaskStatus(str, enum.Enum):
     BLOCKED = "blocked"
 
 
+class TaskSource(str, enum.Enum):
+    MANUAL = "manual"
+    SYNCED_FROM_PLAN = "synced_from_plan"
+
+
 class Task(Base):
     __tablename__ = "tasks"
 

@@ -17,6 +17,11 @@ class TaskEventAction(str, enum.Enum):
     ASSIGNED = "assigned"
     COMMENTED = "commented"
     DELETED = "deleted"
+    # Phase 1 — task-automation 설계서 Decision Log 2026-04-26 Rev2
+    SYNCED_FROM_PLAN = "synced_from_plan"
+    CHECKED_BY_COMMIT = "checked_by_commit"
+    UNCHECKED_BY_COMMIT = "unchecked_by_commit"
+    ARCHIVED_FROM_PLAN = "archived_from_plan"
 
 
 class TaskEvent(Base):
