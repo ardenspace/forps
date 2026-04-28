@@ -319,4 +319,58 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise NotImplementedError("Task 12 에서 작성")
+    # 13) daily partition + log_events
+    today = datetime.utcnow().date()
+    for day_offset in range(31):
+        d = today + timedelta(days=day_offset)
+        partition_name = f"log_events_{d.strftime('%Y%m%d')}"
+        op.execute(f"DROP TABLE IF EXISTS {partition_name}")
+    op.execute("DROP INDEX IF EXISTS idx_log_message_trgm")
+    op.drop_index("idx_log_unfingerprinted", table_name="log_events")
+    op.drop_index("idx_log_version_sha", table_name="log_events")
+    op.drop_index("idx_log_fingerprint", table_name="log_events")
+    op.drop_index("idx_log_project_level_received", table_name="log_events")
+    op.execute("DROP TABLE IF EXISTS log_events")
+    # pg_trgm 은 다른 곳에서 쓸 수도 있으므로 굳이 DROP 하지 않음.
+
+    # 9) ErrorGroup
+    op.drop_table("error_groups")
+
+    # 8) RateLimitWindow
+    op.drop_table("rate_limit_windows")
+
+    # 7) LogIngestToken
+    op.drop_table("log_ingest_tokens")
+
+    # 6) GitPushEvent
+    op.drop_table("git_push_events")
+
+    # 5) Handoff
+    op.drop_table("handoffs")
+
+    # 4) Task — CHECK + 부분 인덱스 + 4 컬럼
+    op.drop_constraint("ck_task_last_commit_sha_format", "tasks", type_="check")
+    op.drop_index("idx_task_project_external_id", table_name="tasks")
+    op.drop_column("tasks", "archived_at")
+    op.drop_column("tasks", "last_commit_sha")
+    op.drop_column("tasks", "external_id")
+    op.drop_column("tasks", "source")
+
+    # 3) Project — CHECK + 6 컬럼
+    op.drop_constraint("ck_project_last_synced_commit_sha_format", "projects", type_="check")
+    op.drop_column("projects", "webhook_secret_encrypted")
+    op.drop_column("projects", "last_synced_commit_sha")
+    op.drop_column("projects", "handoff_dir")
+    op.drop_column("projects", "plan_path")
+    op.drop_column("projects", "git_default_branch")
+    op.drop_column("projects", "git_repo_url")
+
+    # 2) 신규 enum 타입
+    op.execute("DROP TYPE IF EXISTS errorgroupstatus")
+    op.execute("DROP TYPE IF EXISTS loglevel")
+    op.execute("DROP TYPE IF EXISTS tasksource")
+
+    # 1) TaskEventAction 4값 — PostgreSQL ALTER TYPE DROP VALUE 미지원.
+    # 4 enum 값이 downgrade 후에도 남는다. 새 row 가 enum 값을 사용하지
+    # 않았다면 무해. 사용했다면 downgrade 자체가 부적절한 상황.
+    # 운영 노트: Phase 1 downgrade 가 필요하면 사전에 row 정리 필요.
