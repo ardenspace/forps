@@ -8,6 +8,7 @@ from app.models.handoff import Handoff
 from app.models.git_push_event import GitPushEvent
 from app.models.log_ingest_token import LogIngestToken
 from app.models.rate_limit_window import RateLimitWindow
+from app.models.error_group import ErrorGroup, ErrorGroupStatus
 
 __all__ = [
     "User",
@@ -23,4 +24,6 @@ __all__ = [
     "GitPushEvent",
     "LogIngestToken",
     "RateLimitWindow",
+    "ErrorGroup",
+    "ErrorGroupStatus",
 ]
