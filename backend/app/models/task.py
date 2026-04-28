@@ -15,6 +15,11 @@ class TaskStatus(str, enum.Enum):
     BLOCKED = "blocked"
 
 
+class TaskSource(str, enum.Enum):
+    MANUAL = "manual"
+    SYNCED_FROM_PLAN = "synced_from_plan"
+
+
 class Task(Base):
     __tablename__ = "tasks"
 
@@ -29,6 +34,16 @@ class Task(Base):
     reporter_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
     due_date: Mapped[date | None]
+
+    # Phase 1 — task-automation 설계서 §4.1
+    source: Mapped[TaskSource] = mapped_column(default=TaskSource.MANUAL)
+    external_id: Mapped[str | None] = mapped_column(default=None)
+    last_commit_sha: Mapped[str | None] = mapped_column(default=None)
+    archived_at: Mapped[datetime | None] = mapped_column(default=None)
+
+    def __init__(self, **kwargs: object) -> None:
+        kwargs.setdefault("source", TaskSource.MANUAL)
+        super().__init__(**kwargs)
 
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)

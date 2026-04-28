@@ -4,6 +4,12 @@ from app.models.project import Project, ProjectMember
 from app.models.task import Task, Comment
 from app.models.share_link import ShareLink
 from app.models.task_event import TaskEvent
+from app.models.handoff import Handoff
+from app.models.git_push_event import GitPushEvent
+from app.models.log_ingest_token import LogIngestToken
+from app.models.rate_limit_window import RateLimitWindow
+from app.models.error_group import ErrorGroup, ErrorGroupStatus
+from app.models.log_event import LogEvent, LogLevel
 
 __all__ = [
     "User",
@@ -15,4 +21,12 @@ __all__ = [
     "Comment",
     "ShareLink",
     "TaskEvent",
+    "Handoff",
+    "GitPushEvent",
+    "LogIngestToken",
+    "RateLimitWindow",
+    "ErrorGroup",
+    "ErrorGroupStatus",
+    "LogEvent",
+    "LogLevel",
 ]
