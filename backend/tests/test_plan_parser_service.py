@@ -7,7 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from app.services.plan_parser_service import parse_plan
+from app.services.plan_parser_service import (
+    DuplicateExternalIdError,
+    parse_plan,
+)
 
 
 FIXTURE = (Path(__file__).parent / "fixtures" / "plan_sample.md").read_text()
@@ -119,9 +122,6 @@ def test_parse_plan_returns_to_non_task_section():
     ids = [t.external_id for t in plan.tasks]
     assert ids == ["task-001", "task-002"]
     assert "task-NOTE" not in ids
-
-
-from app.services.plan_parser_service import DuplicateExternalIdError
 
 
 def test_parse_plan_duplicate_external_id_raises():

@@ -172,6 +172,31 @@ def test_parse_handoff_free_notes_partial_missing_ok():
     assert fn.blockers is None
 
 
+def test_parse_handoff_unknown_h3_does_not_leak_checkboxes_into_checks():
+    """스펙 외 ### 헤더 아래 체크박스가 최상위 checks 로 leak되면 안 됨 (code review I-1)."""
+    text = """# Handoff: main — @x
+
+## 2026-04-29
+
+- [x] task-001
+- [ ] task-002
+
+### 알 수 없는 사용자 헤더
+
+- [x] task-999
+
+### 다음
+
+내일
+"""
+    h = parse_handoff(text)
+    ids = [c.external_id for c in h.sections[0].checks]
+    assert ids == ["task-001", "task-002"]
+    assert "task-999" not in ids
+    # 자유 영역은 정상 동작 — `### 다음` 은 알려진 헤더이므로 채집됨
+    assert h.sections[0].free_notes.next == "내일"
+
+
 def test_parse_handoff_free_notes_section_terminates_at_next_h3_or_h2():
     """### 마지막 커밋 다음에 ### 다음 또는 ## 가 오면 거기서 끊김."""
     text = """# Handoff: main — @x

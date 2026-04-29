@@ -50,6 +50,8 @@ def _parse_section_body(body_lines: list[str]) -> tuple[list[CheckItem], list[Su
 
     체크박스 / 서브태스크 는 첫 ### 헤더 등장 전까지 만 추출.
     `### 마지막 커밋` / `### 다음` / `### 블로커` 안의 텍스트는 다음 ### 또는 끝까지 모음.
+    그 외 `### 헤더` (스펙에 없는 사용자 임의 헤더) 는 자유 영역 수집을 일시 정지하지만
+    체크박스로의 복귀는 막는다 — H3 영역 이후 라인은 모두 무시.
     """
     checks: list[CheckItem] = []
     subtasks: list[Subtask] = []
@@ -57,6 +59,8 @@ def _parse_section_body(body_lines: list[str]) -> tuple[list[CheckItem], list[Su
 
     free_notes_raw: dict[str, list[str]] = {"last_commit": [], "next": [], "blockers": []}
     current_free_key: str | None = None
+    # 첫 ### 헤더 등장 후 True — 체크박스 영역으로의 복귀 차단 (스펙: 체크박스는 ### 등장 전까지만).
+    in_h3_zone = False
 
     for raw in body_lines:
         # HR 구분선 (`---`) 은 자유 영역 수집을 종료하고 이후 라인을 무시
@@ -66,12 +70,17 @@ def _parse_section_body(body_lines: list[str]) -> tuple[list[CheckItem], list[Su
 
         h3 = _FREE_NOTE_HEADER_RE.match(raw)
         if h3:
+            in_h3_zone = True
             name = h3.group("name").strip()
             current_free_key = _FREE_NOTE_HEADERS.get(name)
             continue
 
         if current_free_key is not None:
             free_notes_raw[current_free_key].append(raw)
+            continue
+
+        # ### 영역 진입 후엔 체크박스 매칭 차단 — 알 수 없는 H3 아래 체크박스가 leak되지 않게.
+        if in_h3_zone:
             continue
 
         # 체크박스 영역 (### 등장 전)
