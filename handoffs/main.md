@@ -1,5 +1,48 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-04-29
+
+- [x] **Phase 2 완료** — webhook 수신 endpoint + 서명 검증 + reaper (브랜치 `feature/phase-2-webhook-receive`)
+  - [x] Fernet 마스터 키 (`FORPS_FERNET_KEY`) + `app/core/crypto.py` (encrypt_secret / decrypt_secret / generate_webhook_secret)
+  - [x] `cryptography==44.0.0` 의존성 핀
+  - [x] `GitHubPushPayload` Pydantic 스키마 (6 nested models, `extra="ignore"`, `branch` property, `to_commits_json()`)
+  - [x] github_webhook_service: HMAC-SHA256 (constant-time) + repo URL 정규화 매칭 (.git/trailing-slash/case 흡수) + GitPushEvent INSERT (UNIQUE 충돌 SAVEPOINT silent skip)
+  - [x] commits_truncated 플래그 (len >= 20, `GITHUB_WEBHOOK_COMMITS_CAP` 상수)
+  - [x] discord-summary endpoint 분리 → `app/api/v1/endpoints/discord.py` (URL 변동 없음)
+  - [x] `webhooks.py`는 GitHub 전용으로 정리, `POST /api/v1/webhooks/github` 마운트
+  - [x] 응답 정책: 401 (서명 실패/secret 없음), 200 (정상/unknown repo silent ACK/중복 멱등), 500 (Fernet 복호화 실패)
+  - [x] `push_event_reaper` (`REAPER_GRACE = 5min`, callback pluggable — Phase 4 sync 주입), `run_reaper_once()` lifespan hook
+  - [x] alembic `fileConfig(disable_existing_loggers=True)` 함정 conftest 회피 (`_reenable_app_loggers` + `caplog` autouse handler)
+  - [x] **70 tests passing** (Phase 1 41 + Phase 2 신규 29: 3 crypto + 4 schema + 12 service + 6 endpoint + 4 reaper)
+
+### 마지막 커밋
+
+- forps: `6ed9053 feat(phase2): startup hook — reaper 1회 호출 (DB 실패 시 부팅 진행)` (브랜치 `feature/phase-2-webhook-receive`)
+- 브랜치 base: `e1aa4f1` (main, Phase 1 머지 직후)
+- 머지 전 PR 생성 + 사용자 검토 단계
+
+### 다음 (Phase 3 — PLAN/handoff 파서)
+
+- [ ] `plan_parser_service` (PLAN.md → `[{external_id, title, assignee, paths}]`, 정규식)
+- [ ] `handoff_parser_service` (체크박스 + `### 마지막 커밋`/`### 다음`/`### 블로커` 자유 영역)
+- [ ] 들여쓰기 0인 최상위 체크박스만 DB 반영, 들여쓰기 ≥ 2는 `free_notes.subtasks`로 보존
+- [ ] `external_id` 중복 reject (PLAN 단계 + DB UNIQUE 2차 방어)
+- [ ] 텍스트 입력만으로 단위 테스트 — 파일 fetch는 Phase 4
+
+### 블로커
+
+없음
+
+### 메모 (2026-04-29 추가)
+
+- **`record_push_event` SAVEPOINT 패턴**: UNIQUE 충돌 시 plan 의 flat rollback 대신 `async with db.begin_nested()` 채택. 이유: 테스트의 함수-스코프 `async_session` 이 외부 ORM 객체(`proj` 등)를 보존해야 함. flat rollback 시 `MissingGreenlet` 발생. 프로덕션은 `Depends(get_db)` 가 요청별 fresh 세션이라 둘 다 정상이지만 SAVEPOINT 가 더 일반적이고 안전함.
+- **Fernet 키 회전 운영 절차 미정**: `FORPS_FERNET_KEY` 회전 시 모든 `webhook_secret_encrypted` 가 복호화 불가 → 운영 문서 별도 작성 필요. 첫 프로덕션 배포 전 잠금.
+- **`InvalidToken` 핸들러**: 현재 endpoint 가 `cryptography` 직접 import. Phase 4 sync_service 진입 시 service 레이어로 wrapper 옮길지 검토 (router 가 외부 라이브러리에 직접 의존하지 않게).
+- **알림 정책**: Phase 2 는 webhook 수신만. unknown repo 200 ACK 는 GitHub 재전송 방지 의도 — 운영 시 unknown repo 가 빈번하면 webhook 등록 실수 의심. log 모니터링 기준 추가 필요.
+- **alembic + python logging 함정**: `alembic.ini` 의 `[loggers]` 섹션은 `disable_existing_loggers=True` 기본값 — `app.*` 로거 silent disable. 본 phase 에서 conftest 회피 추가. 후속 plan 작성 시 logging 단위 테스트는 이 패턴 주의.
+
+---
+
 ## 2026-04-28
 
 - [x] **Phase 1 완료** — forps 본체 alembic 마이그레이션 + pytest 인프라 (브랜치 `feature/phase-1-models-migrations`)
