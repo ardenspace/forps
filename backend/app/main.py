@@ -7,21 +7,31 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.v1.router import api_v1_router
+from app.database import AsyncSessionLocal
 from app.services.discord_service import start_weekly_scheduler
-from app.services.push_event_reaper import run_reaper_once
+from app.services.git_repo_service import fetch_compare_files, fetch_file
+from app.services.push_event_reaper import reap_pending_events
+from app.services.sync_service import process_event
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: 미처리 push event 회수 (Phase 2 — Phase 4에 sync 주입)
+    # Startup: 미처리 push event 회수 (Phase 4 — sync_service 콜백 주입)
     try:
-        reaped = await run_reaper_once()
+        async with AsyncSessionLocal() as db:
+            async def _cb(ev):
+                await process_event(
+                    db, ev,
+                    fetch_file=fetch_file,
+                    fetch_compare=fetch_compare_files,
+                )
+            reaped = await reap_pending_events(db, _cb)
+            await db.commit()
         if reaped:
             logger.info("startup reaper picked up %d pending push events", reaped)
     except Exception:
-        # 부팅을 막지 않음 — DB 미준비 등
         logger.exception("startup reaper failed")
 
     # Startup: 주간 리포트 스케줄러 시작
