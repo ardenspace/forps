@@ -200,3 +200,83 @@ async def test_webhook_project_without_secret_returns_401(
         headers={"X-Hub-Signature-256": "sha256=x", "X-GitHub-Event": "push"},
     )
     assert res.status_code == 401
+
+
+async def test_webhook_decrypt_failure_returns_500(
+    async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+):
+    """Fernet 마스터 키 회전 후 기존 webhook_secret_encrypted 복호화 실패 → 500.
+
+    설계서 §8: DB/decrypt 실패는 500 (operator signal, GitHub 자동 재시도).
+    이 path 는 로컬 키 mismatch 만 발생 — 일상적 4xx 와 분리.
+    """
+    import importlib
+    import app.config
+    import app.core.crypto
+
+    # Step 1: encrypt 'real-secret' under master key A
+    monkeypatch.setenv("FORPS_FERNET_KEY", Fernet.generate_key().decode())
+    importlib.reload(app.config)
+    importlib.reload(app.core.crypto)
+    from app.core.crypto import encrypt_secret as encrypt_a
+
+    ws = Workspace(name="ws", slug=f"ws-{uuid.uuid4().hex[:8]}")
+    async_session.add(ws)
+    await async_session.flush()
+    proj = Project(
+        workspace_id=ws.id,
+        name="p",
+        git_repo_url="https://github.com/ardenspace/app-chak",
+        webhook_secret_encrypted=encrypt_a("real-secret"),
+    )
+    async_session.add(proj)
+    await async_session.commit()
+
+    # Step 2: rotate master key to B, reload — old ciphertext now undecryptable
+    monkeypatch.setenv("FORPS_FERNET_KEY", Fernet.generate_key().decode())
+    importlib.reload(app.config)
+    importlib.reload(app.core.crypto)
+
+    from app.main import app
+    from app.database import get_db
+
+    async def override_get_db():
+        yield async_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # any signature — request never reaches signature verification
+        res = await client.post(
+            "/api/v1/webhooks/github",
+            content=FIXTURE,
+            headers={"X-Hub-Signature-256": "sha256=anything", "X-GitHub-Event": "push"},
+        )
+    app.dependency_overrides.clear()
+
+    assert res.status_code == 500
+    # body 미저장 — decrypt 실패는 INSERT 전 단계
+    rows = (
+        await async_session.execute(
+            select(GitPushEvent).where(GitPushEvent.project_id == proj.id)
+        )
+    ).scalars().all()
+    assert len(rows) == 0
+
+
+async def test_webhook_non_push_event_returns_200_ignored(
+    client_with_db, async_session: AsyncSession
+):
+    """X-GitHub-Event != 'push' → 200 ACK + status=ignored. (GitHub ping 등)"""
+    res = await client_with_db.post(
+        "/api/v1/webhooks/github",
+        content=FIXTURE,
+        headers={"X-GitHub-Event": "ping"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body == {"status": "ignored", "event": "ping"}
+
+    # DB 미저장
+    rows = (await async_session.execute(select(GitPushEvent))).scalars().all()
+    assert len(rows) == 0

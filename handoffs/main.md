@@ -13,7 +13,7 @@
   - [x] 응답 정책: 401 (서명 실패/secret 없음), 200 (정상/unknown repo silent ACK/중복 멱등), 500 (Fernet 복호화 실패)
   - [x] `push_event_reaper` (`REAPER_GRACE = 5min`, callback pluggable — Phase 4 sync 주입), `run_reaper_once()` lifespan hook
   - [x] alembic `fileConfig(disable_existing_loggers=True)` 함정 conftest 회피 (`_reenable_app_loggers` + `caplog` autouse handler)
-  - [x] **70 tests passing** (Phase 1 41 + Phase 2 신규 29: 3 crypto + 4 schema + 12 service + 6 endpoint + 4 reaper)
+  - [x] **73 tests passing** (Phase 1 41 + Phase 2 신규 32: 3 crypto + 4 schema + 13 service + 8 endpoint + 4 reaper)
 
 ### 마지막 커밋
 

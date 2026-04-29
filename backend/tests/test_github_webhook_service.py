@@ -180,3 +180,16 @@ async def test_record_push_event_idempotent_on_duplicate_sha(
     # second는 기존 row 반환 또는 None — 둘 다 허용 (silent 의미)
     if second is not None:
         assert second.id == first.id
+
+
+async def test_record_push_event_commits_truncated_false_at_19(
+    async_session: AsyncSession,
+):
+    """경계 검증: len < 20 → commits_truncated False (GITHUB_WEBHOOK_COMMITS_CAP)."""
+    proj = await _seed_workspace_with_project(
+        async_session, "https://github.com/ardenspace/app-chak"
+    )
+    payload = _payload(commits_count=19)
+    event = await record_push_event(async_session, proj, payload)
+    assert event is not None
+    assert event.commits_truncated is False
