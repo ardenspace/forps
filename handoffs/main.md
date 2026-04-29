@@ -1,5 +1,48 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-04-30
+
+- [x] **Phase 3 완료** — PLAN/handoff 파서 (브랜치 `feature/phase-3-parsers`)
+  - [x] `ParsedPlan` / `ParsedTask` Pydantic 스키마 (`extra="forbid"`)
+  - [x] `ParsedHandoff` / `HandoffSection` / `CheckItem` / `Subtask` / `FreeNotes` Pydantic 스키마
+  - [x] `plan_parser_service.parse_plan()` — `## 태스크` 섹션 제한, `[task-XXX]` 형식 + `@user` + `` `path` `` 추출, `DuplicateExternalIdError` raise
+  - [x] `handoff_parser_service.parse_handoff()` — 헤더 / `## YYYY-MM-DD` 섹션 / 들여쓰기 0 체크박스 / 들여쓰기 ≥ 2 서브태스크 / `### 마지막 커밋·다음·블로커` 자유 영역, `MalformedHandoffError`
+  - [x] sections date desc 정렬 (sections[0] = active)
+  - [x] `---` HR 구분선 처리 (실제 handoff 관례 — date 섹션간 분리자가 trailing whitespace 로 들어가지 않게)
+  - [x] 알 수 없는 `### 헤더` 아래 체크박스 leak 차단 (code review I-1)
+  - [x] **103 tests passing** (Phase 1 41 + Phase 2 32 + Phase 3 30: 13 plan_parser + 17 handoff_parser)
+
+### 마지막 커밋
+
+- forps: `<sha> docs(handoff): Phase 3 완료 + Phase 4 다음 할 일` (브랜치 `feature/phase-3-parsers`)
+- 브랜치 base: `c3a2817` (main, Phase 2 머지 직후)
+- 머지 전 PR 생성 + 사용자 검토 단계
+
+### 다음 (Phase 4 — sync_service + git fetch)
+
+- [ ] `git_repo_service` (GitHub Contents API + Compare API) — PAT Fernet 복호화 재사용
+- [ ] `sync_service` — webhook → fetch → parse → DB 반영 + TaskEvent 생성
+- [ ] `push_event_reaper` callback 주입 (Phase 2 stub 교체)
+- [ ] 멱등성 (CRITICAL — 같은 webhook 2번 → 1번 반영)
+- [ ] PLAN 에서 사라진 task → `archived_at` soft-delete
+- [ ] 체크 → 언체크 (DONE → TODO 회귀) 처리
+- [ ] **Phase 3 파서 하드닝 (code review I-2 / I-3)**: title 안의 em-dash 가 잘리는 문제 + assignee/path 정규식이 title 영역까지 스캔하는 문제. 위치 기반 (positional) 파싱으로 sync_service 작성과 함께 보강.
+
+### 블로커
+
+없음
+
+### 메모 (2026-04-30 Phase 3 추가)
+
+- **파서는 순수 함수**: DB / 외부 API 의존 없음 — 테스트는 testcontainers 미사용 (pytest 기본). 0.08s 만에 30 tests 완료.
+- **들여쓰기 인식**: `(?:    |\t|  )+` — 스페이스 2/4 또는 탭. code review M-1 에서 3-space 들여쓰기는 silent drop 됨 지적. PLAN 작성 가이드에 들여쓰기 규약(2 또는 4 스페이스, 또는 탭) lint 추가 검토.
+- **`---` HR 처리**: 실제 `handoffs/main.md` 가 date 섹션 사이에 `---` 구분선 사용 (3 occurrences). 이게 마지막 free-note 영역 (`### 블로커`) 의 raw 에 trailing 으로 따라붙어 `"없음\n\n---"` 문제 발생. `_parse_section_body` 에서 `---` 만나면 `current_free_key = None` 으로 reset.
+- **알 수 없는 ### 헤더 leak (I-1 fix)**: `_FREE_NOTE_HEADERS` dict 외의 H3 (예: `### 회의록`) 가 등장하면 `current_free_key = None` 이 되어 그 아래 체크박스가 다시 `_TOP_CHECK_RE` 매칭으로 빠져 `checks` 에 leak되던 문제. `in_h3_zone` 플래그로 H3 진입 후 체크박스 매칭 차단. 회귀 테스트 추가.
+- **Em-dash 전용 헤더 RE**: `_HEADER_RE` 가 `—` (U+2014) 만 허용 — `--` ASCII 허용 안 함. Phase 4 sync_service 의 에러 메시지에 명시 필요.
+- **에러 분류 결정**: 형식 깨짐 라인은 skip (parsing-resilient), 결정적 fail (헤더/날짜 부재, ID 중복) 만 예외. Phase 4 sync_service 가 예외 잡아 `GitPushEvent.error` 기록.
+
+---
+
 ## 2026-04-29
 
 - [x] **Phase 2 완료** — webhook 수신 endpoint + 서명 검증 + reaper (브랜치 `feature/phase-2-webhook-receive`)
