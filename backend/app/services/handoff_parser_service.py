@@ -45,6 +45,44 @@ _SUB_CHECK_RE = re.compile(
 )
 
 
+def _parse_section_body(body_lines: list[str]) -> tuple[list[CheckItem], list[Subtask], FreeNotes]:
+    """한 날짜 섹션의 본문 라인들 → (checks, subtasks, free_notes).
+
+    free_notes 는 Task 8 에서 채움 — 본 task 는 빈 FreeNotes 반환.
+    """
+    checks: list[CheckItem] = []
+    subtasks: list[Subtask] = []
+    last_top_id: str | None = None
+
+    for raw in body_lines:
+        # 들여쓰기 0 인 최상위 체크박스
+        top_match = _TOP_CHECK_RE.match(raw)
+        if top_match:
+            external_id = top_match.group("id")
+            checks.append(
+                CheckItem(
+                    external_id=external_id,
+                    checked=top_match.group("check").lower() == "x",
+                    extra=top_match.group("extra").strip(),
+                )
+            )
+            last_top_id = external_id
+            continue
+
+        # 들여쓰기 ≥ 2 (스페이스 2/4 또는 탭) 체크박스
+        sub_match = _SUB_CHECK_RE.match(raw)
+        if sub_match:
+            subtasks.append(
+                Subtask(
+                    parent_external_id=last_top_id,
+                    checked=sub_match.group("check").lower() == "x",
+                    text=sub_match.group("text").strip(),
+                )
+            )
+
+    return checks, subtasks, FreeNotes()
+
+
 def parse_handoff(text: str) -> ParsedHandoff:
     """handoff 텍스트 → ParsedHandoff. sections 는 date desc."""
     lines = text.splitlines()
@@ -80,10 +118,17 @@ def parse_handoff(text: str) -> ParsedHandoff:
     if not section_blocks:
         raise MalformedHandoffError("no `## YYYY-MM-DD` section found")
 
-    sections = [
-        HandoffSection(date=date, checks=[], subtasks=[], free_notes=FreeNotes())
-        for date, _body in section_blocks
-    ]
+    sections = []
+    for date, body in section_blocks:
+        checks, subtasks, free_notes = _parse_section_body(body)
+        sections.append(
+            HandoffSection(
+                date=date,
+                checks=checks,
+                subtasks=subtasks,
+                free_notes=free_notes,
+            )
+        )
     sections.sort(key=lambda s: s.date, reverse=True)
 
     return ParsedHandoff(branch=branch, author_git_login=author, sections=sections)

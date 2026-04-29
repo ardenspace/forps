@@ -73,3 +73,59 @@ def test_parse_handoff_single_section():
     h = parse_handoff(text)
     assert len(h.sections) == 1
     assert h.sections[0].date == "2026-04-29"
+
+
+def test_parse_handoff_active_section_top_level_checks():
+    h = parse_handoff(FIXTURE)
+    active = h.sections[0]  # 2026-04-26
+    ids = [c.external_id for c in active.checks]
+    assert ids == ["task-001", "task-007"]
+    assert active.checks[0].checked is True
+    assert active.checks[1].checked is False
+
+
+def test_parse_handoff_check_extra_text_preserved():
+    """`- [ ] task-007 (60% 완료)` → CheckItem.extra = '(60% 완료)'."""
+    h = parse_handoff(FIXTURE)
+    t007 = next(c for c in h.sections[0].checks if c.external_id == "task-007")
+    assert "60% 완료" in t007.extra
+
+
+def test_parse_handoff_subtasks_indent_two_or_more():
+    """들여쓰기 2 이상 체크박스는 subtasks 로 분리, parent 는 직전 최상위."""
+    h = parse_handoff(FIXTURE)
+    active = h.sections[0]
+    assert len(active.subtasks) == 4
+    parents = {s.parent_external_id for s in active.subtasks}
+    assert parents == {"task-007"}  # 직전 최상위가 task-007
+    texts = [s.text for s in active.subtasks]
+    assert texts == [
+        "이메일 입력 필드",
+        "validation 로직",
+        "약관 동의 체크박스",
+        "에러 메시지 i18n",
+    ]
+    assert active.subtasks[0].checked is True
+    assert active.subtasks[2].checked is False
+
+
+def test_parse_handoff_subtask_without_top_level_parent_has_none():
+    text = """# Handoff: main — @x
+
+## 2026-04-29
+
+  - [ ] 어떤 부모 체크박스 없이 들여쓰기 2 로 시작
+"""
+    h = parse_handoff(text)
+    active = h.sections[0]
+    assert len(active.subtasks) == 1
+    assert active.subtasks[0].parent_external_id is None
+
+
+def test_parse_handoff_per_section_checks_isolated():
+    """다른 날짜 섹션의 체크박스가 섞이지 않음."""
+    h = parse_handoff(FIXTURE)
+    older = h.sections[1]  # 2026-04-25
+    ids = [c.external_id for c in older.checks]
+    assert ids == ["task-001", "task-002"]
+    assert older.subtasks == []
