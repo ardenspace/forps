@@ -25,6 +25,8 @@ class Project(Base):
     handoff_dir: Mapped[str] = mapped_column(default="handoffs/")
     last_synced_commit_sha: Mapped[str | None] = mapped_column(default=None)
     webhook_secret_encrypted: Mapped[bytes | None] = mapped_column(default=None)
+    # Phase 4 — task-automation 설계서 §9 (GitHub PAT Fernet 암호화 저장)
+    github_pat_encrypted: Mapped[bytes | None] = mapped_column(default=None)
 
     def __init__(self, **kwargs: object) -> None:
         kwargs.setdefault("git_default_branch", "main")
