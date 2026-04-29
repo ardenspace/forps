@@ -119,3 +119,36 @@ def test_parse_plan_returns_to_non_task_section():
     ids = [t.external_id for t in plan.tasks]
     assert ids == ["task-001", "task-002"]
     assert "task-NOTE" not in ids
+
+
+from app.services.plan_parser_service import DuplicateExternalIdError
+
+
+def test_parse_plan_duplicate_external_id_raises():
+    text = """## 태스크
+
+- [ ] [task-001] 첫 번째 — @alice
+- [ ] [task-002] 다른 거
+- [ ] [task-001] 같은 ID 재등장 — @bob
+"""
+    with pytest.raises(DuplicateExternalIdError) as exc_info:
+        parse_plan(text)
+    assert exc_info.value.external_id == "task-001"
+
+
+def test_parse_plan_duplicate_across_task_sections_raises():
+    """다른 ## 태스크 섹션이라도 같은 PLAN 내라면 중복 reject."""
+    text = """## 태스크
+
+- [ ] [task-001] 첫 번째
+
+## 노트
+
+(중간 노트)
+
+## 태스크
+
+- [ ] [task-001] 다시 나타남
+"""
+    with pytest.raises(DuplicateExternalIdError):
+        parse_plan(text)
