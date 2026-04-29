@@ -369,3 +369,149 @@ async def test_process_event_does_not_archive_manual_tasks(async_session: AsyncS
     )
     await async_session.refresh(manual)
     assert manual.archived_at is None
+
+
+async def test_process_event_inserts_handoff_row(async_session: AsyncSession):
+    """handoff 변경 → fetch + parse → Handoff INSERT (parsed_tasks/free_notes 채워짐)."""
+    proj = await _seed_project(async_session)
+    handoff_text = """# Handoff: feature/login — @alice
+
+## 2026-04-30
+
+- [x] task-001
+- [ ] task-002
+
+### 마지막 커밋
+
+abc1234 — 작업 진행
+"""
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        if path == "handoffs/feature-login.md":
+            return handoff_text
+        return None
+
+    event = await _seed_event(
+        async_session, proj,
+        branch="feature/login",
+        commits=[{"modified": ["handoffs/feature-login.md"]}],
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+
+    rows = (await async_session.execute(
+        select(Handoff).where(Handoff.project_id == proj.id)
+    )).scalars().all()
+    assert len(rows) == 1
+    h = rows[0]
+    assert h.commit_sha == event.head_commit_sha
+    assert h.branch == "feature/login"
+    assert h.author_git_login == "alice"
+    assert h.parsed_tasks is not None
+    ids = [pt["external_id"] for pt in h.parsed_tasks]
+    assert ids == ["task-001", "task-002"]
+    assert h.free_notes is not None
+    assert "abc1234" in h.free_notes.get("last_commit", "")
+
+
+async def test_process_event_handoff_idempotent_on_replay(async_session: AsyncSession):
+    """같은 commit_sha 로 두 번 process → Handoff 1 행 (processed_at 가드)."""
+    proj = await _seed_project(async_session)
+    handoff_text = "# Handoff: main — @alice\n\n## 2026-04-30\n\n- [x] task-001\n"
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return handoff_text if path == "handoffs/main.md" else None
+
+    event1 = await _seed_event(
+        async_session, proj, head_sha="c" * 40,
+        commits=[{"modified": ["handoffs/main.md"]}],
+    )
+    await process_event(
+        async_session, event1,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+    # 두 번째 호출 — processed_at 가드로 즉시 종료
+    await process_event(
+        async_session, event1,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+
+    rows = (await async_session.execute(
+        select(Handoff).where(Handoff.project_id == proj.id)
+    )).scalars().all()
+    assert len(rows) == 1
+
+
+async def test_process_event_handoff_unique_conflict_silent_skip(
+    async_session: AsyncSession,
+):
+    """Handoff UNIQUE (project_id, commit_sha) 충돌 → SAVEPOINT rollback, silent skip, error 없음.
+
+    시나리오: 동일 commit_sha 로 Handoff 행이 이미 존재할 때 process_event 가
+    IntegrityError 를 SAVEPOINT 로 흡수하고, processed_at 을 기록하며 error 는 None.
+    """
+    proj = await _seed_project(async_session)
+    target_sha = "d" * 40
+    handoff_text = "# Handoff: main — @alice\n\n## 2026-04-30\n\n- [x] task-001\n"
+
+    # Handoff 행을 미리 직접 삽입 — 이후 event 가 동일 commit_sha 로 충돌 유발
+    pre_existing = Handoff(
+        project_id=proj.id,
+        branch="main",
+        author_git_login="alice",
+        commit_sha=target_sha,
+        pushed_at=datetime.utcnow(),
+        raw_content=handoff_text,
+        parsed_tasks=[{"external_id": "task-001", "checked": True, "extra": None}],
+        free_notes={},
+    )
+    async_session.add(pre_existing)
+    await async_session.commit()
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return handoff_text if path == "handoffs/main.md" else None
+
+    # 새 이벤트: head_sha = target_sha → _apply_handoff 에서 UNIQUE 충돌 발생
+    event = await _seed_event(
+        async_session, proj, head_sha=target_sha,
+        commits=[{"modified": ["handoffs/main.md"]}],
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+
+    await async_session.refresh(event)
+    # SAVEPOINT 가 conflict 를 흡수해야 함 — error 없이 processed_at 설정
+    assert event.processed_at is not None
+    assert event.error is None
+
+    rows = (await async_session.execute(
+        select(Handoff).where(Handoff.project_id == proj.id)
+    )).scalars().all()
+    assert len(rows) == 1
+
+
+async def test_process_event_malformed_handoff_records_error(async_session: AsyncSession):
+    """handoff 헤더 없음 → MalformedHandoffError → event.error 기록, processed_at = now."""
+    proj = await _seed_project(async_session)
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        if path == "handoffs/main.md":
+            return "## 2026-04-30\n\n- [ ] task-001\n"
+        return None
+
+    event = await _seed_event(
+        async_session, proj,
+        commits=[{"modified": ["handoffs/main.md"]}],
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+    await async_session.refresh(event)
+    assert event.processed_at is not None
+    assert event.error is not None
+    assert "MalformedHandoffError" in event.error
