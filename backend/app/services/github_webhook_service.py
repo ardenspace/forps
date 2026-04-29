@@ -9,6 +9,11 @@
 import hashlib
 import hmac
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.project import Project
+
 
 def verify_signature(body: bytes, signature: str | None, secret: str) -> bool:
     """`X-Hub-Signature-256` HMAC-SHA256 검증. constant-time compare.
@@ -20,3 +25,30 @@ def verify_signature(body: bytes, signature: str | None, secret: str) -> bool:
     expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     received = signature[len("sha256="):]
     return hmac.compare_digest(expected, received)
+
+
+def _normalize_repo_url(url: str) -> str:
+    """`.git` suffix / trailing `/` / case 정규화 — html_url vs clone_url 흡수."""
+    u = url.strip().lower()
+    if u.endswith(".git"):
+        u = u[:-4]
+    if u.endswith("/"):
+        u = u[:-1]
+    return u
+
+
+async def find_project_by_repo_url(
+    db: AsyncSession, repo_url: str
+) -> Project | None:
+    """payload.repository.html_url 또는 clone_url → Project lookup.
+
+    매칭 실패 시 None — 호출자(endpoint)는 200 + 경고 로그로 처리.
+    """
+    target = _normalize_repo_url(repo_url)
+    # 정규화 후 비교: Python 측 정규화로 처리 — 후보 수 적음 가정.
+    stmt = select(Project).where(Project.git_repo_url.is_not(None))
+    rows = (await db.execute(stmt)).scalars().all()
+    for proj in rows:
+        if proj.git_repo_url and _normalize_repo_url(proj.git_repo_url) == target:
+            return proj
+    return None
