@@ -48,14 +48,33 @@ _SUB_CHECK_RE = re.compile(
 def _parse_section_body(body_lines: list[str]) -> tuple[list[CheckItem], list[Subtask], FreeNotes]:
     """한 날짜 섹션의 본문 라인들 → (checks, subtasks, free_notes).
 
-    free_notes 는 Task 8 에서 채움 — 본 task 는 빈 FreeNotes 반환.
+    체크박스 / 서브태스크 는 첫 ### 헤더 등장 전까지 만 추출.
+    `### 마지막 커밋` / `### 다음` / `### 블로커` 안의 텍스트는 다음 ### 또는 끝까지 모음.
     """
     checks: list[CheckItem] = []
     subtasks: list[Subtask] = []
     last_top_id: str | None = None
 
+    free_notes_raw: dict[str, list[str]] = {"last_commit": [], "next": [], "blockers": []}
+    current_free_key: str | None = None
+
     for raw in body_lines:
-        # 들여쓰기 0 인 최상위 체크박스
+        # HR 구분선 (`---`) 은 자유 영역 수집을 종료하고 이후 라인을 무시
+        if raw.strip() == "---":
+            current_free_key = None
+            continue
+
+        h3 = _FREE_NOTE_HEADER_RE.match(raw)
+        if h3:
+            name = h3.group("name").strip()
+            current_free_key = _FREE_NOTE_HEADERS.get(name)
+            continue
+
+        if current_free_key is not None:
+            free_notes_raw[current_free_key].append(raw)
+            continue
+
+        # 체크박스 영역 (### 등장 전)
         top_match = _TOP_CHECK_RE.match(raw)
         if top_match:
             external_id = top_match.group("id")
@@ -69,7 +88,6 @@ def _parse_section_body(body_lines: list[str]) -> tuple[list[CheckItem], list[Su
             last_top_id = external_id
             continue
 
-        # 들여쓰기 ≥ 2 (스페이스 2/4 또는 탭) 체크박스
         sub_match = _SUB_CHECK_RE.match(raw)
         if sub_match:
             subtasks.append(
@@ -80,7 +98,17 @@ def _parse_section_body(body_lines: list[str]) -> tuple[list[CheckItem], list[Su
                 )
             )
 
-    return checks, subtasks, FreeNotes()
+    def _join(lines: list[str]) -> str | None:
+        # 빈 줄 trim, 내용 없으면 None
+        joined = "\n".join(lines).strip()
+        return joined or None
+
+    free_notes = FreeNotes(
+        last_commit=_join(free_notes_raw["last_commit"]),
+        next=_join(free_notes_raw["next"]),
+        blockers=_join(free_notes_raw["blockers"]),
+    )
+    return checks, subtasks, free_notes
 
 
 def parse_handoff(text: str) -> ParsedHandoff:

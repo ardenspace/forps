@@ -129,3 +129,72 @@ def test_parse_handoff_per_section_checks_isolated():
     ids = [c.external_id for c in older.checks]
     assert ids == ["task-001", "task-002"]
     assert older.subtasks == []
+
+
+def test_parse_handoff_free_notes_active_section():
+    h = parse_handoff(FIXTURE)
+    active = h.sections[0]  # 2026-04-26
+    assert active.free_notes.last_commit is not None
+    assert "abc1234" in active.free_notes.last_commit
+    assert "로그인 폼 검증 로직" in active.free_notes.last_commit
+    assert active.free_notes.next is not None
+    assert "task-007" in active.free_notes.next
+    assert active.free_notes.blockers == "없음"
+
+
+def test_parse_handoff_free_notes_older_section():
+    h = parse_handoff(FIXTURE)
+    older = h.sections[1]  # 2026-04-25
+    assert older.free_notes.last_commit is not None
+    assert "def5678" in older.free_notes.last_commit
+    assert "초기 스캐폴딩" in older.free_notes.last_commit
+    assert older.free_notes.next == "내일 task-007 진입"
+    assert older.free_notes.blockers is not None
+    assert "backend API 응답 포맷 미정" in older.free_notes.blockers
+
+
+def test_parse_handoff_free_notes_partial_missing_ok():
+    """### 다음 만 있고 ### 마지막 커밋 / ### 블로커 없어도 정상 파싱."""
+    text = """# Handoff: main — @x
+
+## 2026-04-29
+
+- [ ] task-001
+
+### 다음
+
+내일 마무리
+"""
+    h = parse_handoff(text)
+    fn = h.sections[0].free_notes
+    assert fn.last_commit is None
+    assert fn.next == "내일 마무리"
+    assert fn.blockers is None
+
+
+def test_parse_handoff_free_notes_section_terminates_at_next_h3_or_h2():
+    """### 마지막 커밋 다음에 ### 다음 또는 ## 가 오면 거기서 끊김."""
+    text = """# Handoff: main — @x
+
+## 2026-04-29
+
+- [ ] task-001
+
+### 마지막 커밋
+
+abc1234
+
+### 다음
+
+내일
+
+## 2026-04-28
+
+- [ ] task-old
+"""
+    h = parse_handoff(text)
+    s_new = h.sections[0]
+    assert s_new.free_notes.last_commit == "abc1234"
+    assert s_new.free_notes.next == "내일"
+    s_old = h.sections[1]
+    assert s_old.free_notes.last_commit is None
