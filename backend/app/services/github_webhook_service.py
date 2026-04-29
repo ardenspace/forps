@@ -10,9 +10,12 @@ import hashlib
 import hmac
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.git_push_event import GitPushEvent
 from app.models.project import Project
+from app.schemas.webhook import GitHubPushPayload
 
 
 def verify_signature(body: bytes, signature: str | None, secret: str) -> bool:
@@ -52,3 +55,49 @@ async def find_project_by_repo_url(
         if proj.git_repo_url and _normalize_repo_url(proj.git_repo_url) == target:
             return proj
     return None
+
+
+# GitHub Webhooks API 가 commits 배열을 최대 20개로 잘라서 전달.
+# len == 20 이면 truncated 가능성 — Phase 4 sync_service 가 Compare API 로 보정.
+GITHUB_WEBHOOK_COMMITS_CAP = 20
+
+
+async def record_push_event(
+    db: AsyncSession,
+    project: Project,
+    payload: GitHubPushPayload,
+) -> GitPushEvent | None:
+    """GitPushEvent INSERT. UNIQUE 충돌 시 None 반환 (멱등성).
+
+    Phase 2 범위: raw 보존만. processed_at / error 는 Phase 4 sync_service 가 채움.
+    """
+    # 롤백 후 ORM 객체 접근 시 expired 오류 방지 — 스칼라 값 미리 캡처.
+    project_id = project.id
+    head_sha = payload.head_commit.id
+
+    event = GitPushEvent(
+        project_id=project_id,
+        branch=payload.branch,
+        head_commit_sha=head_sha,
+        commits=payload.to_commits_json(),
+        commits_truncated=len(payload.commits) >= GITHUB_WEBHOOK_COMMITS_CAP,
+        pusher=payload.pusher.name,
+    )
+    try:
+        # SAVEPOINT 사용 — IntegrityError 롤백이 외부 세션 상태를 오염시키지 않도록.
+        async with db.begin_nested():
+            db.add(event)
+    except IntegrityError:
+        # UNIQUE (project_id, head_commit_sha) 충돌 → SAVEPOINT 자동 롤백 후 기존 row 반환
+        existing = (
+            await db.execute(
+                select(GitPushEvent).where(
+                    GitPushEvent.project_id == project_id,
+                    GitPushEvent.head_commit_sha == head_sha,
+                )
+            )
+        ).scalar_one_or_none()
+        return existing
+    await db.commit()
+    await db.refresh(event)
+    return event
