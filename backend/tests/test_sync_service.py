@@ -304,3 +304,68 @@ async def test_process_event_no_change_when_unchecked_and_already_not_done(
         select(TaskEvent).where(TaskEvent.task_id == existing.id)
     )).scalars().all()
     assert len(events) == 0
+
+
+async def test_process_event_archives_tasks_removed_from_plan(async_session: AsyncSession):
+    """기존 synced task 가 새 PLAN 에 없으면 archived_at = now() + ARCHIVED_FROM_PLAN."""
+    proj = await _seed_project(async_session)
+    keep = Task(
+        project_id=proj.id, title="유지", source=TaskSource.SYNCED_FROM_PLAN,
+        external_id="task-001", status=TaskStatus.TODO,
+    )
+    removed = Task(
+        project_id=proj.id, title="삭제됨", source=TaskSource.SYNCED_FROM_PLAN,
+        external_id="task-OLD", status=TaskStatus.DOING,
+    )
+    async_session.add_all([keep, removed])
+    await async_session.commit()
+    await async_session.refresh(removed)
+
+    plan_text = "## 태스크\n\n- [ ] [task-001] 유지\n"
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}]
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+    await async_session.refresh(removed)
+    await async_session.refresh(keep)
+
+    assert removed.archived_at is not None
+    assert keep.archived_at is None
+    events = (await async_session.execute(
+        select(TaskEvent).where(TaskEvent.task_id == removed.id)
+    )).scalars().all()
+    assert any(e.action == TaskEventAction.ARCHIVED_FROM_PLAN for e in events)
+
+
+async def test_process_event_does_not_archive_manual_tasks(async_session: AsyncSession):
+    """source=MANUAL 인 task 는 PLAN 에 없어도 archived_at 안 변경."""
+    proj = await _seed_project(async_session)
+    manual = Task(
+        project_id=proj.id, title="수동", source=TaskSource.MANUAL,
+        external_id=None, status=TaskStatus.TODO,
+    )
+    async_session.add(manual)
+    await async_session.commit()
+    await async_session.refresh(manual)
+
+    plan_text = "## 태스크\n\n- [ ] [task-001] PLAN 만\n"
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}]
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+    await async_session.refresh(manual)
+    assert manual.archived_at is None
