@@ -515,3 +515,97 @@ async def test_process_event_malformed_handoff_records_error(async_session: Asyn
     assert event.processed_at is not None
     assert event.error is not None
     assert "MalformedHandoffError" in event.error
+
+
+async def test_process_event_idempotent_full_cycle(async_session: AsyncSession):
+    """CRITICAL: PLAN+handoff 동시 변경 푸시를 두 번 process → DB 변경 1회, Handoff 1행, TaskEvent 중복 없음."""
+    proj = await _seed_project(async_session)
+    plan_text = """# 스프린트: 2026-04
+
+## 태스크
+
+- [x] [task-001] 완료된 작업 — @alice
+"""
+    handoff_text = """# Handoff: main — @alice
+
+## 2026-04-30
+
+- [x] task-001
+"""
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        if path == "PLAN.md":
+            return plan_text
+        if path == "handoffs/main.md":
+            return handoff_text
+        return None
+
+    event = await _seed_event(
+        async_session, proj,
+        head_sha="e" * 40,
+        commits=[{"modified": ["PLAN.md", "handoffs/main.md"]}],
+    )
+
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+
+    tasks_after_first = (await async_session.execute(
+        select(Task).where(Task.project_id == proj.id)
+    )).scalars().all()
+    handoffs_after_first = (await async_session.execute(
+        select(Handoff).where(Handoff.project_id == proj.id)
+    )).scalars().all()
+    events_after_first = (await async_session.execute(
+        select(TaskEvent)
+        .where(TaskEvent.task_id.in_([t.id for t in tasks_after_first]))
+    )).scalars().all()
+
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+
+    tasks_after_second = (await async_session.execute(
+        select(Task).where(Task.project_id == proj.id)
+    )).scalars().all()
+    handoffs_after_second = (await async_session.execute(
+        select(Handoff).where(Handoff.project_id == proj.id)
+    )).scalars().all()
+    events_after_second = (await async_session.execute(
+        select(TaskEvent)
+        .where(TaskEvent.task_id.in_([t.id for t in tasks_after_second]))
+    )).scalars().all()
+
+    assert len(tasks_after_first) == len(tasks_after_second) == 1
+    assert len(handoffs_after_first) == len(handoffs_after_second) == 1
+    assert len(events_after_first) == len(events_after_second)
+
+
+async def test_process_event_records_error_on_duplicate_external_id(
+    async_session: AsyncSession,
+):
+    """PLAN 에 같은 external_id 가 두 번 → DuplicateExternalIdError → event.error 기록."""
+    proj = await _seed_project(async_session)
+    plan_text = """## 태스크
+
+- [ ] [task-001] 첫 번째
+- [ ] [task-001] 중복 — @bob
+"""
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj,
+        commits=[{"modified": ["PLAN.md"]}],
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+    await async_session.refresh(event)
+    assert event.error is not None
+    assert "DuplicateExternalIdError" in event.error
+    assert event.processed_at is not None
