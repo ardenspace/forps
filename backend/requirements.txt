@@ -22,3 +22,6 @@ email-validator==2.1.0
 
 # Utils
 httpx==0.26.0
+
+# Crypto (Phase 2 — webhook secret 암복호화)
+cryptography==44.0.0
