@@ -196,3 +196,111 @@ async def test_process_event_skips_when_plan_404(async_session: AsyncSession):
         select(Task).where(Task.project_id == proj.id)
     )).scalars().all()
     assert rows == []
+
+
+async def test_process_event_checks_existing_task_to_done(async_session: AsyncSession):
+    """기존 TODO task 가 PLAN 에서 [x] 로 → DONE + CHECKED_BY_COMMIT TaskEvent."""
+    proj = await _seed_project(async_session)
+    existing = Task(
+        project_id=proj.id,
+        title="기존",
+        source=TaskSource.SYNCED_FROM_PLAN,
+        external_id="task-001",
+        status=TaskStatus.TODO,
+    )
+    async_session.add(existing)
+    await async_session.commit()
+    await async_session.refresh(existing)
+
+    plan_text = "## 태스크\n\n- [x] [task-001] 기존 — @alice\n"
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}]
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+    await async_session.refresh(existing)
+
+    assert existing.status == TaskStatus.DONE
+    assert existing.last_commit_sha == event.head_commit_sha
+    events = (await async_session.execute(
+        select(TaskEvent).where(TaskEvent.task_id == existing.id)
+    )).scalars().all()
+    assert any(e.action == TaskEventAction.CHECKED_BY_COMMIT for e in events)
+
+
+async def test_process_event_rolls_back_done_to_todo(async_session: AsyncSession):
+    """직전 DONE 인 task 가 PLAN 에서 [ ] 로 → TODO + UNCHECKED_BY_COMMIT."""
+    proj = await _seed_project(async_session)
+    existing = Task(
+        project_id=proj.id,
+        title="롤백 케이스",
+        source=TaskSource.SYNCED_FROM_PLAN,
+        external_id="task-002",
+        status=TaskStatus.DONE,
+    )
+    async_session.add(existing)
+    await async_session.commit()
+    await async_session.refresh(existing)
+
+    plan_text = "## 태스크\n\n- [ ] [task-002] 롤백 케이스\n"
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}]
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+    await async_session.refresh(existing)
+
+    assert existing.status == TaskStatus.TODO
+    events = (await async_session.execute(
+        select(TaskEvent).where(TaskEvent.task_id == existing.id)
+    )).scalars().all()
+    assert any(e.action == TaskEventAction.UNCHECKED_BY_COMMIT for e in events)
+
+
+async def test_process_event_no_change_when_unchecked_and_already_not_done(
+    async_session: AsyncSession,
+):
+    """직전 TODO 인 task 가 PLAN 에서 [ ] → 변경 없음, TaskEvent 도 안 만듦."""
+    proj = await _seed_project(async_session)
+    existing = Task(
+        project_id=proj.id,
+        title="변경 없음",
+        source=TaskSource.SYNCED_FROM_PLAN,
+        external_id="task-003",
+        status=TaskStatus.DOING,
+    )
+    async_session.add(existing)
+    await async_session.commit()
+    await async_session.refresh(existing)
+
+    plan_text = "## 태스크\n\n- [ ] [task-003] 변경 없음\n"
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}]
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+    await async_session.refresh(existing)
+
+    assert existing.status == TaskStatus.DOING
+    events = (await async_session.execute(
+        select(TaskEvent).where(TaskEvent.task_id == existing.id)
+    )).scalars().all()
+    assert len(events) == 0
