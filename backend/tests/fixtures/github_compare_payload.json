@@ -1,0 +1,16 @@
+{
+  "url": "https://api.github.com/repos/ardenspace/app-chak/compare/aaaa...bbbb",
+  "html_url": "https://github.com/ardenspace/app-chak/compare/aaaa...bbbb",
+  "base_commit": {"sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+  "merge_base_commit": {"sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+  "status": "ahead",
+  "ahead_by": 25,
+  "behind_by": 0,
+  "total_commits": 25,
+  "files": [
+    {"filename": "PLAN.md", "status": "modified"},
+    {"filename": "handoffs/feature-login-redesign.md", "status": "modified"},
+    {"filename": "frontend/Login.tsx", "status": "modified"},
+    {"filename": "backend/auth/jwt.py", "status": "added"}
+  ]
+}

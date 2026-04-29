@@ -86,3 +86,59 @@ async def test_fetch_file_normalizes_repo_url_with_trailing_slash_or_git(monkeyp
     monkeypatch.setattr(httpx.AsyncClient, "send", fake_send)
     await fetch_file(_REPO + ".git/", None, _SHA, _PATH)
     assert "/repos/ardenspace/app-chak/contents/PLAN.md" in captured["url"]
+
+
+import json
+from pathlib import Path
+
+
+_COMPARE_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "github_compare_payload.json"
+).read_text()
+
+
+async def test_fetch_compare_files_returns_filenames(monkeypatch: pytest.MonkeyPatch):
+    from app.services.git_repo_service import fetch_compare_files
+
+    captured: dict[str, object] = {}
+
+    async def fake_send(self, request: httpx.Request, **_kwargs):
+        captured["url"] = str(request.url)
+        return httpx.Response(status_code=200, json=json.loads(_COMPARE_FIXTURE))
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", fake_send)
+    base, head = "a" * 40, "b" * 40
+    files = await fetch_compare_files(_REPO, "ghp_abc", base, head)
+
+    assert files == [
+        "PLAN.md",
+        "handoffs/feature-login-redesign.md",
+        "frontend/Login.tsx",
+        "backend/auth/jwt.py",
+    ]
+    assert f"/compare/{base}...{head}" in captured["url"]
+
+
+async def test_fetch_compare_files_404_raises(monkeypatch: pytest.MonkeyPatch):
+    from app.services.git_repo_service import fetch_compare_files
+
+    async def fake_send(self, request: httpx.Request, **_kwargs):
+        return httpx.Response(status_code=404, json={"message": "Not Found"})
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", fake_send)
+    with pytest.raises(httpx.HTTPStatusError):
+        await fetch_compare_files(_REPO, "ghp_abc", "a" * 40, "b" * 40)
+
+
+async def test_fetch_compare_files_empty_when_no_files(monkeypatch: pytest.MonkeyPatch):
+    from app.services.git_repo_service import fetch_compare_files
+
+    async def fake_send(self, request: httpx.Request, **_kwargs):
+        return httpx.Response(
+            status_code=200,
+            json={"files": [], "status": "identical", "ahead_by": 0, "behind_by": 0},
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", fake_send)
+    files = await fetch_compare_files(_REPO, None, "a" * 40, "a" * 40)
+    assert files == []
