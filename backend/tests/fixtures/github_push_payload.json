@@ -1,0 +1,33 @@
+{
+  "ref": "refs/heads/feature/login-redesign",
+  "before": "0000000000000000000000000000000000000000",
+  "after": "abcdef0123456789abcdef0123456789abcdef01",
+  "repository": {
+    "id": 12345,
+    "full_name": "ardenspace/app-chak",
+    "html_url": "https://github.com/ardenspace/app-chak",
+    "clone_url": "https://github.com/ardenspace/app-chak.git",
+    "default_branch": "main"
+  },
+  "pusher": {
+    "name": "alice",
+    "email": "alice@example.com"
+  },
+  "head_commit": {
+    "id": "abcdef0123456789abcdef0123456789abcdef01",
+    "message": "feat: login form refactor",
+    "timestamp": "2026-04-29T10:00:00+09:00",
+    "author": {"name": "alice", "email": "alice@example.com"}
+  },
+  "commits": [
+    {
+      "id": "abcdef0123456789abcdef0123456789abcdef01",
+      "message": "feat: login form refactor",
+      "timestamp": "2026-04-29T10:00:00+09:00",
+      "author": {"name": "alice", "email": "alice@example.com"},
+      "added": [],
+      "removed": [],
+      "modified": ["frontend/Login.tsx", "handoffs/feature-login-redesign.md"]
+    }
+  ]
+}

@@ -8,6 +8,7 @@ fixture chain:
 Per-test fresh DB; teardown terminates connections then DROPs. Not pytest-xdist safe.
 """
 
+import logging
 import os
 import uuid
 
@@ -23,6 +24,43 @@ from testcontainers.postgres import PostgresContainer
 
 # Patch app.config.settings at import time so env.py picks up real URLs later
 import app.config  # noqa: E402 — ensures settings singleton is in sys.modules
+
+
+def _reenable_app_loggers() -> None:
+    """alembic.ini의 fileConfig(disable_existing_loggers=True) 실행 후
+    'app.*' 로거의 disabled 플래그를 False 로 복원.
+
+    alembic upgrade 는 alembic.ini [loggers] 에 없는 기존 로거를 disabled=True 로 설정.
+    테스트에서 app.* 로거가 살아있어야 caplog 캡처가 동작함.
+    """
+    manager = logging.root.manager
+    for name, logger_or_placeholder in manager.loggerDict.items():
+        if name.startswith("app"):
+            if isinstance(logger_or_placeholder, logging.Logger):
+                logger_or_placeholder.disabled = False
+
+
+# ---------------------------------------------------------------------------
+# pytest-asyncio + caplog 호환성 픽스처
+# pytest-asyncio 0.24 에서 async 픽스처를 사용하는 테스트는
+# caplog.handler 가 root logger 에 설치되지 않는 문제가 있음.
+# 'app' 로거에 caplog.handler 를 직접 설치해 app 내부 로그를 caplog 에 캡처.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _install_caplog_handler_on_app_logger(caplog: pytest.LogCaptureFixture):
+    """async 테스트에서 caplog 캡처가 동작하도록 'app' logger 에 handler 직접 설치.
+
+    pytest-asyncio 0.24 에서 caplog.handler 가 root 에 설치되지 않는 문제 회피.
+    """
+    app_logger = logging.getLogger("app")
+    app_logger.addHandler(caplog.handler)
+    original_level = app_logger.level
+    if original_level == logging.NOTSET or original_level > logging.DEBUG:
+        app_logger.setLevel(logging.DEBUG)
+    yield
+    app_logger.removeHandler(caplog.handler)
+    app_logger.setLevel(original_level)
 
 # ---------------------------------------------------------------------------
 # Session-scoped: one PG container for the entire test run
@@ -125,6 +163,8 @@ def upgraded_db(alembic_config, postgres_container, fresh_db):
         command.upgrade(alembic_config, "head")
     finally:
         app.config.settings.database_url = original_db_url
+        # alembic.ini 의 fileConfig 가 기존 로거를 disable 함 — app 로거 복원
+        _reenable_app_loggers()
 
     yield {
         "db_name": fresh_db,

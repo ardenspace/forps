@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # CORS
     allowed_origins: str = "http://localhost:5173"
 
+    # Crypto (Phase 2 — Fernet 마스터 키)
+    forps_fernet_key: str
+
 
 
 settings = Settings()
