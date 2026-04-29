@@ -38,3 +38,38 @@ def test_parse_handoff_branch_with_slash_preserved():
     h = parse_handoff(text)
     assert h.branch == "release/v1.2.3"
     assert h.author_git_login == "bob"
+
+
+def test_parse_handoff_two_date_sections():
+    h = parse_handoff(FIXTURE)
+    assert len(h.sections) == 2
+    assert h.sections[0].date == "2026-04-26"
+    assert h.sections[1].date == "2026-04-25"
+
+
+def test_parse_handoff_sections_sorted_desc_regardless_of_input_order():
+    """입력에서 옛날 날짜가 먼저 나와도 정렬 결과는 desc."""
+    text = """# Handoff: feature/x — @alice
+
+## 2026-04-25
+
+- [ ] task-1
+
+## 2026-04-29
+
+- [x] task-2
+"""
+    h = parse_handoff(text)
+    assert [s.date for s in h.sections] == ["2026-04-29", "2026-04-25"]
+
+
+def test_parse_handoff_single_section():
+    text = """# Handoff: main — @bob
+
+## 2026-04-29
+
+- [ ] task-001
+"""
+    h = parse_handoff(text)
+    assert len(h.sections) == 1
+    assert h.sections[0].date == "2026-04-29"

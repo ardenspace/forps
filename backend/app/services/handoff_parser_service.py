@@ -61,9 +61,29 @@ def parse_handoff(text: str) -> ParsedHandoff:
     if branch is None or author is None:
         raise MalformedHandoffError("missing or malformed `# Handoff: <branch> — @<user>` header")
 
-    sections: list[HandoffSection] = []
-    # 날짜 섹션 분리 + 본문 파싱은 후속 task 에서 채움.
-    if not any(_DATE_SECTION_RE.match(line) for line in lines):
+    # 날짜 섹션으로 분할
+    section_blocks: list[tuple[str, list[str]]] = []  # (date, body_lines)
+    current_date: str | None = None
+    current_body: list[str] = []
+    for line in lines:
+        date_match = _DATE_SECTION_RE.match(line)
+        if date_match:
+            if current_date is not None:
+                section_blocks.append((current_date, current_body))
+            current_date = date_match.group("date")
+            current_body = []
+        elif current_date is not None:
+            current_body.append(line)
+    if current_date is not None:
+        section_blocks.append((current_date, current_body))
+
+    if not section_blocks:
         raise MalformedHandoffError("no `## YYYY-MM-DD` section found")
+
+    sections = [
+        HandoffSection(date=date, checks=[], subtasks=[], free_notes=FreeNotes())
+        for date, _body in section_blocks
+    ]
+    sections.sort(key=lambda s: s.date, reverse=True)
 
     return ParsedHandoff(branch=branch, author_git_login=author, sections=sections)
