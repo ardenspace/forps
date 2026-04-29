@@ -101,3 +101,98 @@ async def test_process_event_marks_processed_when_no_relevant_files(
     await async_session.refresh(event)
     assert event.processed_at is not None
     assert event.error is None
+
+
+async def test_process_event_creates_new_tasks_from_plan(async_session: AsyncSession):
+    """PLAN 에 새 task-XXX 가 있으면 Task INSERT (source=SYNCED_FROM_PLAN, status 매핑)."""
+    proj = await _seed_project(async_session)
+    plan_text = """# 스프린트: 2026-04
+
+## 태스크
+
+- [ ] [task-001] 새 작업 — @alice
+- [x] [task-002] 이미 완료 — @bob
+"""
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        if path == "PLAN.md":
+            return plan_text
+        return None
+
+    event = await _seed_event(
+        async_session, proj,
+        commits=[{"modified": ["PLAN.md"], "added": [], "removed": []}],
+    )
+
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+
+    await async_session.refresh(event)
+    assert event.processed_at is not None
+    assert event.error is None
+
+    rows = (
+        await async_session.execute(
+            select(Task).where(Task.project_id == proj.id).order_by(Task.external_id)
+        )
+    ).scalars().all()
+    assert len(rows) == 2
+    t1 = next(t for t in rows if t.external_id == "task-001")
+    t2 = next(t for t in rows if t.external_id == "task-002")
+    assert t1.source == TaskSource.SYNCED_FROM_PLAN
+    assert t1.status == TaskStatus.TODO
+    assert t1.title == "새 작업"
+    assert t1.last_commit_sha == event.head_commit_sha
+    assert t2.status == TaskStatus.DONE
+    assert t2.last_commit_sha == event.head_commit_sha
+
+
+async def test_process_event_records_synced_from_plan_event(async_session: AsyncSession):
+    """신규 Task INSERT 시 TaskEvent(action=SYNCED_FROM_PLAN) 도 만들어짐."""
+    proj = await _seed_project(async_session)
+    plan_text = "## 태스크\n\n- [ ] [task-100] 신규 — @alice\n"
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}]
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+
+    task = (await async_session.execute(
+        select(Task).where(Task.external_id == "task-100")
+    )).scalar_one()
+    events = (await async_session.execute(
+        select(TaskEvent).where(TaskEvent.task_id == task.id)
+    )).scalars().all()
+    assert any(e.action == TaskEventAction.SYNCED_FROM_PLAN for e in events)
+
+
+async def test_process_event_skips_when_plan_404(async_session: AsyncSession):
+    """fetch_file 이 None (404) 반환 → sync 종료, error 기록 없음."""
+    proj = await _seed_project(async_session)
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}]
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+
+    await async_session.refresh(event)
+    assert event.processed_at is not None
+    assert event.error is None
+    rows = (await async_session.execute(
+        select(Task).where(Task.project_id == proj.id)
+    )).scalars().all()
+    assert rows == []
