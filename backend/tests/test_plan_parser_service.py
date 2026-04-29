@@ -152,3 +152,41 @@ def test_parse_plan_duplicate_across_task_sections_raises():
 """
     with pytest.raises(DuplicateExternalIdError):
         parse_plan(text)
+
+
+def test_parse_plan_title_preserves_em_dash():
+    """code review I-2: title 안의 ' — ' 이 truncate 되지 않아야."""
+    text = """## 태스크
+
+- [ ] [task-001] 로그인 — 1단계 — @alice — `frontend/Login.tsx`
+"""
+    plan = parse_plan(text)
+    t = plan.tasks[0]
+    assert t.title == "로그인 — 1단계"
+    assert t.assignee == "alice"
+    assert t.paths == ["frontend/Login.tsx"]
+
+
+def test_parse_plan_title_with_backtick_in_text_does_not_become_path():
+    """code review I-3: 백틱이 title 영역에 있으면 path 로 추출되지 않아야."""
+    text = """## 태스크
+
+- [ ] [task-002] Use `helper()` for stuff — @bob — `backend/main.py`
+"""
+    plan = parse_plan(text)
+    t = plan.tasks[0]
+    assert t.title == "Use `helper()` for stuff"
+    assert t.assignee == "bob"
+    assert t.paths == ["backend/main.py"]
+
+
+def test_parse_plan_title_with_at_in_text_does_not_become_assignee():
+    """title 안의 '@' 가 assignee 로 잘못 추출되지 않아야."""
+    text = """## 태스크
+
+- [ ] [task-003] Mention @bot in docs — @real_user
+"""
+    plan = parse_plan(text)
+    t = plan.tasks[0]
+    assert t.assignee == "real_user"
+    assert "@bot" in t.title

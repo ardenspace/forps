@@ -35,22 +35,27 @@ _TASK_LINE_RE = re.compile(
 _ASSIGNEE_RE = re.compile(r"@([A-Za-z0-9_-]+)")
 _PATH_RE = re.compile(r"`([^`]+)`")
 _TASK_SECTION_HEADER = "태스크"
+# title delimiter — ` — ` 다음에 `@` 또는 `` ` `` 가 와야 진짜 delimiter (code review I-2/I-3)
+_TITLE_DELIMITER_RE = re.compile(r" — (?=@|`)")
 
 
 def _parse_task_rest(rest: str) -> tuple[str, str | None, list[str]]:
-    r"""`<title> — @user — `path`, `path`` → (title, assignee, paths)."""
-    assignee_match = _ASSIGNEE_RE.search(rest)
+    r"""`<title> — @user — `path`, `path`` → (title, assignee, paths).
+
+    Phase 3 code review I-2/I-3 fix: positional 파싱.
+    - title 은 첫 ` — @` 또는 ` — ` ` 이전까지 (em-dash + backtick/at 조합만 진짜 delimiter)
+    - title 영역에 단독 ` — ` 또는 백틱/@ 있어도 truncate 안 함
+    - assignee/path 는 title 영역 이후에서만 검색
+    """
+    delim = _TITLE_DELIMITER_RE.search(rest)
+    if delim is None:
+        return rest.strip(), None, []
+
+    title = rest[: delim.start()].strip()
+    after = rest[delim.start():]
+    assignee_match = _ASSIGNEE_RE.search(after)
     assignee = assignee_match.group(1) if assignee_match else None
-
-    paths = _PATH_RE.findall(rest)
-
-    # title 은 첫 ` — ` 또는 ` @` 또는 첫 `` ` `` 이전까지
-    title_end = len(rest)
-    for marker in (" — ", " @", "`"):
-        idx = rest.find(marker)
-        if idx != -1 and idx < title_end:
-            title_end = idx
-    title = rest[:title_end].strip()
+    paths = _PATH_RE.findall(after)
     return title, assignee, paths
 
 
