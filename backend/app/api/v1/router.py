@@ -7,6 +7,7 @@ from app.api.v1.endpoints.projects import router as projects_router
 from app.api.v1.endpoints.share_links import router as share_links_router
 from app.api.v1.endpoints.discord import router as discord_router
 from app.api.v1.endpoints.webhooks import router as webhooks_router
+from app.api.v1.endpoints.git_settings import router as git_settings_router
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(auth_router)
@@ -16,3 +17,4 @@ api_v1_router.include_router(projects_router)
 api_v1_router.include_router(share_links_router)
 api_v1_router.include_router(discord_router)
 api_v1_router.include_router(webhooks_router)
+api_v1_router.include_router(git_settings_router)
