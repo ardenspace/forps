@@ -814,3 +814,73 @@ async def test_collect_changed_files_skips_null_sha_before(async_session: AsyncS
 
     # null sha skip → project.last_synced_commit_sha (= "f" * 40) 사용
     assert captured["base"] == "f" * 40
+
+
+# ---------------------------------------------------------------------------
+# B1 / M-6: last_synced_commit_sha update on success
+# ---------------------------------------------------------------------------
+
+
+async def test_process_event_updates_last_synced_on_plan_success(
+    async_session: AsyncSession,
+):
+    """정상 처리 (PLAN 변경 reflect) 후 project.last_synced_commit_sha == event.head_commit_sha."""
+    proj = await _seed_project(async_session)
+    head = "f" * 40
+    event = await _seed_event(
+        async_session,
+        proj,
+        head_sha=head,
+        commits=[{"id": head, "modified": ["PLAN.md"], "added": []}],
+    )
+
+    async def fake_fetch_file(repo, pat, sha, path):
+        return "## 태스크\n\n- [ ] [task-001] T — @alice"
+
+    async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
+        return ["PLAN.md"]
+
+    await process_event(
+        async_session, event, fetch_file=fake_fetch_file, fetch_compare=fake_compare,
+    )
+
+    await async_session.refresh(proj)
+    assert proj.last_synced_commit_sha == head
+    await async_session.refresh(event)
+    assert event.processed_at is not None
+    assert event.error is None
+
+
+async def test_process_event_does_not_update_last_synced_on_failure(
+    async_session: AsyncSession,
+):
+    """fetch_file 가 raise → process_event 가 catch + event.error 기록.
+    이 case 에서는 last_synced_commit_sha 갱신 X (재처리 시 정확한 base 보존)."""
+    proj = await _seed_project(async_session)
+    proj.last_synced_commit_sha = "a" * 40  # 이전 처리분
+    await async_session.commit()
+    await async_session.refresh(proj)
+
+    head = "b" * 40
+    event = await _seed_event(
+        async_session,
+        proj,
+        head_sha=head,
+        commits=[{"id": head, "modified": ["PLAN.md"], "added": []}],
+    )
+
+    async def fake_fetch_file(repo, pat, sha, path):
+        raise RuntimeError("github 502")
+
+    async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
+        return ["PLAN.md"]
+
+    await process_event(
+        async_session, event, fetch_file=fake_fetch_file, fetch_compare=fake_compare,
+    )
+
+    await async_session.refresh(proj)
+    assert proj.last_synced_commit_sha == "a" * 40  # 이전 값 유지
+    await async_session.refresh(event)
+    assert event.error is not None
+    assert "RuntimeError" in event.error

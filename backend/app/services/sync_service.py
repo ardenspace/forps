@@ -51,6 +51,10 @@ async def process_event(
 
     try:
         await _process_inner(db, event, project, fetch_file=fetch_file, fetch_compare=fetch_compare)
+        # M-6: 성공 시 project.last_synced_commit_sha 를 head 로 갱신.
+        # commits_truncated 의 Compare API base 로 사용됨 (sync_service._collect_changed_files).
+        # 실패 path (except 분기) 에서는 갱신 안 함 — 재처리 시 직전 성공 커밋 base 가 유지됨.
+        project.last_synced_commit_sha = event.head_commit_sha
         event.processed_at = datetime.utcnow()
         await db.commit()
     except Exception as exc:
