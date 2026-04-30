@@ -1,5 +1,49 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-04-30 (Phase 5a)
+
+- [x] **Phase 5a 완료** — Backend endpoints + 자동 webhook 등록 (브랜치 `feature/phase-5a-backend-endpoints`)
+  - [x] `GitPushEvent.before_commit_sha` 컬럼 + CHECK 제약 (alembic `a1b2c3d4e5f6`, vanity SHA 수동 작성). `record_push_event` 가 payload.before 저장 (40자 hex 만), `sync_service._collect_changed_files` 가 base 우선 사용 (priority chain: before → last_synced → commits[-1] → head). `0*40` null-sha 는 skip (I-5 fix).
+  - [x] `GET /api/v1/projects/{id}/git-settings` (멤버) — `git_repo_url / plan_path / handoff_dir / last_synced_commit_sha / has_webhook_secret / has_github_pat / public_webhook_url`. 평문 secret 절대 노출 안 함 (raw_text assertion 으로 검증).
+  - [x] `PATCH /api/v1/projects/{id}/git-settings` (OWNER) — 부분 갱신, github_pat 입력 시 즉시 Fernet encrypt + `extra="forbid"` 스키마.
+  - [x] `POST /api/v1/projects/{id}/git-settings/webhook` (OWNER) — `github_hook_service.list_hooks/create_hook/update_hook` (admin:repo_hook 권한 사용). 같은 callback url 의 hook 매칭 시 PATCH (secret rotate), 없으면 POST. URL 매칭은 lowercase + trailing `/` strip (I-3 fix). `_raise_for_status` 가 Authorization 헤더 sanitize (I-1 fix — PAT exc.request.headers leak 차단).
+  - [x] `GET /api/v1/projects/{id}/handoffs?branch=...&limit=...` (멤버) — pushed_at desc, raw_content 제외, limit clamp 1~200.
+  - [x] `POST /api/v1/projects/{id}/git-events/{event_id}/reprocess` (OWNER) — 처리 실패 이벤트 reset + Phase 4 의 `_run_sync_in_new_session` BackgroundTask 재호출.
+  - [x] `forps_public_url` settings + `.env` (기본값 `http://localhost:8000` — prod 는 Cloudflare Tunnel URL).
+  - [x] code review (opus) APPROVED — fixed I-1/I-3/I-5 + missing 404 tests. **169 tests passing** (Phase 1+2+3+4 137 + Phase 5a 32).
+
+### 마지막 커밋
+
+- forps: `<sha> docs(handoff): Phase 5a 완료 + Phase 5b 다음 할 일`
+- 브랜치 base: `44590c6` (main, Phase 4 머지 직후)
+
+### 다음 (Phase 5b — Frontend UI)
+
+- [ ] `frontend/src/services/githubApi.ts` — git-settings / handoffs / reprocess axios 호출 (Phase 5a endpoint 호출)
+- [ ] `frontend/src/hooks/useGithubSettings.ts` — TanStack Query 훅 (GET 캐시 + PATCH/POST mutation)
+- [ ] `frontend/src/pages/ProjectGitSettings.tsx` — repo URL / PAT / plan_path / handoff_dir 입력 폼 + "Webhook 등록" / "재등록" 버튼. PAT 발급 가이드 (admin:repo_hook 스코프).
+- [ ] `frontend/src/pages/HandoffHistory.tsx` — 브랜치별 이력 + 재처리 버튼 (sync 실패 이벤트)
+- [ ] `frontend/src/components/TaskCard.tsx` 수정 — `source` 배지 (`MANUAL` / `SYNCED_FROM_PLAN`) + handoff 누락 ⚠️ 표시. **데이터 정의 필요** (Phase 5b 진입 시 결정).
+- [ ] dev server (vite) + 브라우저 수동 검증
+
+### 블로커
+
+없음
+
+### 메모 (2026-04-30 Phase 5a 추가)
+
+- **`forps_public_url` 기본값 localhost**: prod 배포 시 Cloudflare Tunnel URL 로 환경변수 override 필수. 자동 webhook 등록이 localhost 로 callback 등록하면 GitHub 이 호출 못 함 — 수동 e2e 검증 시 주의.
+- **PAT 권한 범위**: GitHub PAT 는 `admin:repo_hook` 스코프 필요 (자동 webhook 등록용). Phase 5b ProjectGitSettings UI 에 도움말 텍스트 필수.
+- **webhook 자동 등록 = secret rotate**: 매 호출마다 새 secret 생성. 기존 hook 있으면 PATCH 로 secret 갱신 — UI 에서 "재등록" 버튼이 사실상 "secret rotate" 효과 임을 명시.
+- **Vanity revision id `a1b2c3d4e5f6`**: 수동 작성 SHA. autogen 의 random hex 와 다른 패턴이지만 chain 정상 (`down_revision = '274c0ed55105'`). 후속 마이그레이션은 다시 autogen 으로.
+- **code review followup (Phase 5b/6 트래킹)**:
+  - **I-2 (concurrent webhook registration race)**: 두 OWNER 가 동시 `POST /webhook` 호출 → DB 의 webhook_secret 가 stale 될 수 있음 (call A 의 secret 이 commit 마지막에 들어가지만 GitHub side 는 call B 의 secret). 현재는 narrow window. Phase 5b UI 에서 button debounce + post-merge 에 SELECT FOR UPDATE 적용 검토.
+  - **I-4 (reprocess race)**: 사용자가 in-flight sync 와 동시에 재처리 트리거 → 두 process_event 동시 실행. UNIQUE 제약이 일부 보호하지만 TaskEvent 중복 가능. Phase 5b UI 에서 "처리 중" 상태 표시 + post-merge 에 CAS 가드 검토.
+  - **M-6 (last_synced_commit_sha 미사용)**: Phase 1 에서 컬럼 추가됐지만 어디서도 write 안 함. sync_service 가 처리 완료 시 update 해야 하는데 누락. Phase 5b 또는 별도 fix PR.
+  - **M-10 (private import from git_repo_service)**: `github_hook_service` 가 `_auth_headers / _parse_repo / _raise_for_status` (underscore = module-private 위배) 를 import. 후속 refactor 에서 promote 또는 두 모듈 합치기 검토.
+
+---
+
 ## 2026-04-30 (Phase 4)
 
 - [x] **Phase 4 완료** — sync_service + git fetch (브랜치 `feature/phase-4-sync-service`)

@@ -79,6 +79,7 @@ async def record_push_event(
         project_id=project_id,
         branch=payload.branch,
         head_commit_sha=head_sha,
+        before_commit_sha=payload.before if payload.before and len(payload.before) == 40 else None,
         commits=payload.to_commits_json(),
         commits_truncated=len(payload.commits) >= GITHUB_WEBHOOK_COMMITS_CAP,
         pusher=payload.pusher.name,

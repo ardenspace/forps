@@ -140,7 +140,12 @@ async def _collect_changed_files(
     if project.git_repo_url is None:
         return set()
 
-    base = project.last_synced_commit_sha
+    base = event.before_commit_sha
+    # GitHub null-sha (`0` * 40) → "no prior commit", fall through to next priority
+    if base == "0" * 40:
+        base = None
+    if base is None:
+        base = project.last_synced_commit_sha
     if base is None and event.commits:
         base = event.commits[-1].get("id") or event.head_commit_sha
     if base is None:

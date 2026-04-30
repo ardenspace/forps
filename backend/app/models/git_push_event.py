@@ -25,6 +25,8 @@ class GitPushEvent(Base):
 
     branch: Mapped[str]
     head_commit_sha: Mapped[str]
+    # Phase 5a — commits_truncated base 정확화 (webhook payload 의 `before` 필드 보존)
+    before_commit_sha: Mapped[str | None] = mapped_column(default=None)
     commits: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
     commits_truncated: Mapped[bool] = mapped_column(default=False)
     pusher: Mapped[str]
