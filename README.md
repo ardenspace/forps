@@ -46,35 +46,91 @@ forps/
 
 ## 시작하기
 
-### 1. PostgreSQL 실행 (Docker)
+`Makefile` 이 dev 환경 setup 자동화. **app-chak 같은 다른 서비스가 8000/5432 점유 중이어도 충돌 없음** — forps 는 backend 8081 / postgres 5433 default.
+
+### 첫 setup (한 번만)
 
 ```bash
-docker-compose up -d
+make setup
 ```
 
-### 2. 백엔드 실행
+이걸로 다음이 한 번에 됨:
+- `backend/venv` 생성 + dev deps 설치
+- `backend/.env` 자동 생성 (SECRET_KEY / FORPS_FERNET_KEY 랜덤)
+- `frontend/.env.local` 자동 생성 (`VITE_API_URL` 가 backend port 가리킴)
+- `forps-postgres` Docker 컨테이너 5433 에 띄움
+- `alembic upgrade head`
+- `frontend` deps 설치 (bun)
+
+기존 `.env` 가 있으면 보존 (시크릿 안 덮음).
+
+### 일상 작업
+
+두 터미널 필요:
 
 ```bash
+# Terminal 1
+make backend     # uvicorn http://localhost:8081 (auto reload)
+
+# Terminal 2
+make frontend    # vite http://localhost:5173
+```
+
+### 그 외
+
+```bash
+make migrate     # alembic upgrade head
+make test        # backend pytest + frontend build/lint
+make db-down     # forps-postgres 만 stop (app-chak 안 건드림)
+make db-up       # 다시 띄움
+make clean       # forps-postgres 컨테이너 삭제 (volume 은 prune 별도)
+make help        # 전체 target 목록
+```
+
+### 포트 override
+
+```bash
+make backend BACKEND_PORT=8000
+make db-up PG_PORT=5432
+```
+
+### 수동 setup (Makefile 안 쓸 때)
+
+```bash
+# 1. PostgreSQL — app-chak 과 충돌 없는 5433 사용 권장
+docker run -d --name forps-postgres \
+  -e POSTGRES_USER=forps -e POSTGRES_PASSWORD=forps123 -e POSTGRES_DB=forps \
+  -p 5433:5432 postgres:16-alpine
+
+# 2. backend env (template: backend/.env.example)
+cp backend/.env.example backend/.env
+# SECRET_KEY / FORPS_FERNET_KEY 채우기
+
+# 3. backend
 cd backend
+python3.12 -m venv venv && source venv/bin/activate
+pip install -r requirements-dev.txt
+alembic upgrade head
+uvicorn app.main:app --reload --port 8081
 
-# 가상환경 활성화
-source venv/bin/activate
-
-# 서버 실행
-uvicorn app.main:app --reload --port 8000
+# 4. frontend env + dev server
+cp frontend/.env.example frontend/.env.local
+cd frontend && bun install && bun run dev
 ```
 
 서버 실행 후:
-- API: http://localhost:8000
-- API 문서: http://localhost:8000/docs
+- API: http://localhost:8081
+- API 문서: http://localhost:8081/docs
+- Frontend: http://localhost:5173
 
-### 3. 데이터베이스 마이그레이션
+### Alembic
 
 ```bash
 # 새 마이그레이션 생성
+cd backend && source venv/bin/activate
 alembic revision --autogenerate -m "마이그레이션 메시지"
 
-# 마이그레이션 적용
+# 적용
 alembic upgrade head
 
 # 롤백
@@ -97,23 +153,16 @@ alembic downgrade -1
 
 ## 환경변수
 
-`.env` 파일 예시:
+전체 템플릿: `backend/.env.example`, `frontend/.env.example`. `make setup` 이 자동 생성 (시크릿은 랜덤).
 
-```bash
-# Database
-DATABASE_URL=postgresql://forps:forps123@localhost:5432/forps
-
-# JWT
-SECRET_KEY=your-secret-key-here
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=10080
-
-# CORS
-ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
-
-# Discord (optional)
-DISCORD_WEBHOOK_URL=
-```
+| 변수 | 위치 | 설명 |
+|---|---|---|
+| `DATABASE_URL` | backend/.env | PostgreSQL async URL (asyncpg driver) |
+| `SECRET_KEY` | backend/.env | JWT 서명. `secrets.token_urlsafe(32)` |
+| `FORPS_FERNET_KEY` | backend/.env | Webhook secret / GitHub PAT 암호화. `Fernet.generate_key()` |
+| `FORPS_PUBLIC_URL` | backend/.env | webhook callback URL (GitHub 가 호출). 로컬: `http://localhost:8081` / 운영: Cloudflare Tunnel URL |
+| `ALLOWED_ORIGINS` | backend/.env | CORS — frontend origin (default `http://localhost:5173`) |
+| `VITE_API_URL` | frontend/.env.local | backend API base URL (default `http://localhost:8081/api/v1`) |
 
 ## 배포 (Railway)
 
