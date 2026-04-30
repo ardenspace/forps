@@ -131,6 +131,11 @@ async def register_webhook(
     if not can_manage(role):
         raise HTTPException(status_code=403, detail="Owner only")
 
+    # B1 / I-2: 권한 검증 후 row lock 획득.
+    # 동시 OWNER 호출 시 후행은 여기서 대기 → 선행 commit 후 webhook_secret_encrypted 갱신본 보고 진행.
+    # final commit (line ~172) 시 lock release. process_event 와 같은 단일 outer commit 구조라 안전.
+    await db.refresh(project, with_for_update={"nowait": False})
+
     if not project.git_repo_url:
         raise HTTPException(status_code=400, detail="git_repo_url 미설정")
     if project.github_pat_encrypted is None:

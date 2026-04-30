@@ -3,6 +3,7 @@
 설계서: 2026-04-26-ai-task-automation-design.md §5.2, §9
 """
 
+import asyncio
 import uuid
 
 import pytest
@@ -655,3 +656,104 @@ async def test_reprocess_409_when_still_in_flight(
     assert res.status_code == 409
     detail = res.json()["detail"].lower()
     assert "still" in detail or "processing" in detail
+
+
+# ---------------------------------------------------------------------------
+# B1 / I-2: register_webhook SELECT FOR UPDATE 재진입 가드
+# ---------------------------------------------------------------------------
+
+
+async def test_concurrent_register_webhook_serializes(
+    async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, upgraded_db,
+):
+    """두 OWNER 가 동시에 register_webhook 호출 → row lock 으로 직렬화.
+
+    fix 없으면 둘 다 list_hooks → 둘 다 'no matching' → create_hook 2번 호출됨
+    (GitHub 측에 중복 webhook + DB 의 secret 은 마지막 writer 만 매치 → 첫 hook 영구 무효).
+
+    fix 후: 후행 caller 는 권한 검증 직후 db.refresh(..., with_for_update=...) 에서
+    선행 final commit 까지 대기 → list_hooks 결과에 선행이 만든 hook 이 보임 → update_hook 분기.
+    """
+    from cryptography.fernet import Fernet
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    monkeypatch.setenv("FORPS_FERNET_KEY", Fernet.generate_key().decode())
+    import importlib
+    import app.config as _config_mod
+    importlib.reload(_config_mod)
+    import app.core.crypto as _crypto_mod
+    importlib.reload(_crypto_mod)
+
+    user, proj = await _seed_user_project(async_session)
+    proj.git_repo_url = "https://github.com/ardenspace/app-chak"
+    proj.github_pat_encrypted = _crypto_mod.encrypt_secret("ghp_test_token")
+    await async_session.commit()
+    project_id = proj.id
+
+    list_calls = {"n": 0}
+    create_calls = {"n": 0}
+    update_calls = {"n": 0}
+    stored_hook: dict[str, object] = {}
+    t1_inside_list = asyncio.Event()
+    release = asyncio.Event()
+
+    async def slow_list_hooks(repo, pat):  # noqa: ARG001
+        list_calls["n"] += 1
+        if list_calls["n"] == 1:
+            t1_inside_list.set()
+            await release.wait()
+            return []
+        return [stored_hook] if stored_hook else []
+
+    async def fake_create_hook(repo, pat, *, callback_url, secret):  # noqa: ARG001
+        create_calls["n"] += 1
+        h = {"id": 88888, "config": {"url": callback_url}}
+        stored_hook.update(h)
+        return h
+
+    async def fake_update_hook(repo, pat, *, hook_id, callback_url, secret):  # noqa: ARG001
+        update_calls["n"] += 1
+        return {"id": hook_id, "config": {"url": callback_url}}
+
+    import app.services.github_hook_service as hook_mod
+    monkeypatch.setattr(hook_mod, "list_hooks", slow_list_hooks)
+    monkeypatch.setattr(hook_mod, "create_hook", fake_create_hook)
+    monkeypatch.setattr(hook_mod, "update_hook", fake_update_hook)
+
+    # 같은 per-test DB 에 별도 engine 두 개 — 두 독립 세션이 row lock 경쟁하도록.
+    dsn = upgraded_db["async_url"]
+    engine_a = create_async_engine(dsn, echo=False)
+    engine_b = create_async_engine(dsn, echo=False)
+    maker_a = async_sessionmaker(engine_a, expire_on_commit=False)
+    maker_b = async_sessionmaker(engine_b, expire_on_commit=False)
+
+    from app.api.v1.endpoints.git_settings import register_webhook
+
+    async def runner(maker):
+        async with maker() as db:
+            await register_webhook(project_id=project_id, user=user, db=db)
+
+    async def releaser():
+        # T1 이 list_hooks 까지 들어간 시점에 T2 도 entry FOR UPDATE 에서 대기 중이도록 시간 둠.
+        await t1_inside_list.wait()
+        await asyncio.sleep(0.4)
+        release.set()
+
+    try:
+        # T1 먼저 시작해 lock 획득. T2 는 약간 후에 시작해 entry 에서 대기.
+        t1 = asyncio.create_task(runner(maker_a))
+        await asyncio.sleep(0.05)
+        t2 = asyncio.create_task(runner(maker_b))
+        rel = asyncio.create_task(releaser())
+        await asyncio.gather(t1, t2, rel)
+    finally:
+        await engine_a.dispose()
+        await engine_b.dispose()
+
+    # 핵심: create_hook 정확히 1번, update_hook 정확히 1번.
+    # fix 없으면 create_hook 2번 (둘 다 'no matching' 분기) + update_hook 0번.
+    assert create_calls["n"] == 1, (
+        f"create_hook called {create_calls['n']} times — "
+        "FOR UPDATE 가 register_webhook 에 적용되지 않음"
+    )
+    assert update_calls["n"] == 1
