@@ -1,5 +1,52 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-04-30 (Phase 4)
+
+- [x] **Phase 4 완료** — sync_service + git fetch (브랜치 `feature/phase-4-sync-service`)
+  - [x] `Project.github_pat_encrypted` 컬럼 추가 (alembic `274c0ed55105`, Phase 1 누락분 보강) + 회귀 테스트
+  - [x] `git_repo_service` — `fetch_file` (Contents API + base64 decode + 404→None) + `fetch_compare_files` (Compare API). httpx mock 으로 8 단위 테스트 (httpx.Response `_request` 누락 회피로 explicit Request + `_raise_for_status` 헬퍼 채택)
+  - [x] `sync_service.process_event(db, event, *, fetch_file, fetch_compare)` — 의존 주입 / 멱등 가드 / 변경 파일 검사 (commits[*].modified ∪ added 또는 truncated 시 Compare API)
+  - [x] PLAN: 신규 task INSERT (`SYNCED_FROM_PLAN`), 체크 → DONE (`CHECKED_BY_COMMIT`), 언체크 (DONE→TODO 롤백 — `UNCHECKED_BY_COMMIT`), PLAN 에서 사라진 task → `archived_at` (`ARCHIVED_FROM_PLAN`), **PLAN 에 다시 등장 → un-archive (히스토리 보존)**
+  - [x] handoff: `Handoff` INSERT 1행 (UNIQUE `(project_id, commit_sha)` SAVEPOINT 멱등 — Phase 2 패턴), `parsed_tasks` / `free_notes` / `raw_content` 보존, `MalformedHandoffError` 시 `event.error` 기록
+  - [x] webhook endpoint: `BackgroundTasks.add_task(_run_sync_in_new_session, event.id)` — 자체 세션 + 실제 fetcher 주입, 예외는 `logger.exception` 로 보존
+  - [x] reaper callback: lifespan 에서 **이벤트마다 fresh session** 으로 sync_service 호출 (한 이벤트 poison 이 다음 이벤트로 전파 안 되게)
+  - [x] **plan_parser 하드닝** (Phase 3 code review I-2/I-3): title 안의 em-dash / 백틱 / `@` 가 잘못 추출되지 않게 positional 파싱 (`_TITLE_DELIMITER_RE = " — (?=@|\`)"`)
+  - [x] **code review 3-bug fix** (final review): I-1 (un-archive on PLAN re-add), I-2 (poisoned session 후 commit 실패 — `rollback` + `autoflush=False` + `event` mutate + commit), I-3 (reaper 공유 세션 → per-event session)
+  - [x] **137 tests passing** (Phase 1 41 + Phase 2 32 + Phase 3 30 + Phase 4 34)
+
+### 마지막 커밋
+
+- forps: `<sha> docs(handoff): Phase 4 완료 + Phase 5 다음 할 일` (브랜치 `feature/phase-4-sync-service`)
+- 브랜치 base: `3525a21` (main, Phase 3 머지 직후)
+- 머지 전 PR 생성 + 사용자 검토 단계
+
+### 다음 (Phase 5 — UI + 자동 webhook 등록)
+
+- [ ] `ProjectGitSettings.tsx` — repo URL / PAT / plan_path / handoff_dir 입력 폼
+- [ ] 자동 webhook 등록 (GitHub API `POST /repos/{owner}/{repo}/hooks`, 프로젝트별 secret 자동 생성)
+- [ ] `TaskCard.tsx` — `source` 배지 + handoff 누락 ⚠️ 표시
+- [ ] `HandoffHistory.tsx` — 브랜치별 handoff 이력
+- [ ] `POST /api/v1/projects/{id}/git-events/{id}/reprocess` — 사용자 수동 재처리 (sync 실패 이벤트)
+- [ ] commits_truncated base 정확화 — `GitPushEvent.before_commit_sha` 컬럼 추가 (현재 fallback `commits[-1].id` 는 head 와 동일 — 빈 diff. 실제 영향은 truncated push 가 PLAN/handoff 변경한 케이스로 한정)
+
+### 블로커
+
+없음
+
+### 메모 (2026-04-30 Phase 4 추가)
+
+- **GitHub PAT NULL 처리**: PAT 없으면 unauthenticated 호출. 공개 repo 만 가능, rate limit 60/h. app-chak 같은 private repo 에선 PAT 필수. Phase 5 UI 에서 PAT 입력 강제 유도.
+- **commits_truncated base fallback**: 정확한 `before` 가 webhook payload 에 있지만 GitPushEvent 컬럼에 저장 안 함 (Phase 2 plan 누락). 본 phase 에선 `Project.last_synced_commit_sha or commits[-1].id` fallback. `commits[-1]` 은 GitHub webhook 규칙상 head 와 같아 빈 diff — Phase 5 에서 `before_commit_sha` 추가로 보강.
+- **BackgroundTask vs reaper**: webhook endpoint 가 BackgroundTask 로 sync 시작 → 정상 흐름. 컨테이너 재시작 시 in-flight 손실 → reaper 가 5분 grace 후 회수. **reaper 가 sync_service.process_event 를 callback 으로 받음 — 같은 코드 경로**. processed_at 가드로 idempotent.
+- **error 정책 (자동 재시도 안 함)**: sync 실패 시 `event.error` 기록 + `processed_at = now()`. 사용자 수동 재처리 endpoint 는 Phase 5. 그동안 reaper 는 `processed_at IS NULL` 만 픽업 — 자동 무한 retry 회피.
+- **poisoned session 패턴**: `_apply_plan` 안에서 IntegrityError 가 나면 SQLAlchemy 가 session 을 rollback-required 상태로 마킹. 그 위에서 `event.error` 세팅 후 commit 시도 → `PendingRollbackError`. 해결: rollback → `autoflush=False` → event mutate → commit. autoflush 잠금은 commit 직전 stale state 자동 flush 회피용.
+- **un-archive 정책**: spec §4.1 은 archived → re-add 케이스 명시 안 함. forps 에서는 history 보존 (TaskEvent / Comment / assignee) 위해 같은 row 의 `archived_at = None` 으로 처리. 재 INSERT 안 함. partial UNIQUE `(project_id, external_id) WHERE external_id IS NOT NULL` 가 자동으로 catch 했음 — 이걸 발견해 정책 명문화.
+- **plan_parser title 파싱 변경**: `_TITLE_DELIMITER_RE = re.compile(r" — (?=@|\`)")` lookahead. title 안에 단독 ` — ` 또는 백틱 가능. assignee/path 는 delimiter 이후 영역에서만 검색. Phase 3 spec 의 §6.1 라인 형식과 호환 유지 — 13 기존 테스트 무회귀.
+- **Handoff `parsed_tasks` 형식**: `[{external_id, checked, extra}]` (sections[0] 만). `free_notes = {last_commit, next, blockers, subtasks: [{parent_external_id, checked, text}]}`. 다중 날짜 history 는 `raw_content` 에 보존 — Phase 7 brief_service 가 활용.
+- **Handoff UNIQUE conflict 테스트 deviation**: 원안의 "다른 GitPushEvent + 같은 head_sha" 케이스가 Phase 1 의 `uq_git_push_project_head` UNIQUE 에 막힘. 대신 Handoff row 를 미리 seed 하고 process_event 가 SAVEPOINT silent skip 하는지 직접 검증 — 더 직접적.
+
+---
+
 ## 2026-04-30
 
 - [x] **Phase 3 완료** — PLAN/handoff 파서 (브랜치 `feature/phase-3-parsers`)
