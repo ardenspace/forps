@@ -136,3 +136,85 @@ async def test_get_git_settings_redacts_secrets(
     raw_text = res.text
     assert "ghp_super_secret_token" not in raw_text
     assert "super-shared-secret" not in raw_text
+
+
+async def test_patch_git_settings_owner_can_update(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session)
+    token = _auth_token(user)
+    res = await client_with_db.patch(
+        f"/api/v1/projects/{proj.id}/git-settings",
+        json={
+            "git_repo_url": "https://github.com/ardenspace/app-chak",
+            "plan_path": "docs/PLAN.md",
+            "github_pat": "ghp_new_token_value",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["git_repo_url"] == "https://github.com/ardenspace/app-chak"
+    assert body["plan_path"] == "docs/PLAN.md"
+    assert body["has_github_pat"] is True
+    assert "ghp_new_token_value" not in res.text
+
+    await async_session.refresh(proj)
+    assert proj.github_pat_encrypted is not None
+    from app.core.crypto import decrypt_secret
+    assert decrypt_secret(proj.github_pat_encrypted) == "ghp_new_token_value"
+
+
+async def test_patch_git_settings_partial_update_preserves_others(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session)
+    proj.git_repo_url = "https://github.com/old/repo"
+    proj.plan_path = "PLAN.md"
+    await async_session.commit()
+
+    token = _auth_token(user)
+    res = await client_with_db.patch(
+        f"/api/v1/projects/{proj.id}/git-settings",
+        json={"plan_path": "docs/PLAN.md"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    await async_session.refresh(proj)
+    assert proj.git_repo_url == "https://github.com/old/repo"
+    assert proj.plan_path == "docs/PLAN.md"
+
+
+async def test_patch_git_settings_403_for_non_owner(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session, role=WorkspaceRole.EDITOR)
+    token = _auth_token(user)
+    res = await client_with_db.patch(
+        f"/api/v1/projects/{proj.id}/git-settings",
+        json={"plan_path": "x.md"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 403
+
+
+async def test_patch_git_settings_404_for_non_member(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session)
+    other = User(
+        email=f"o-{uuid.uuid4().hex[:8]}@example.com",
+        name="bob",
+        password_hash="x",
+    )
+    async_session.add(other)
+    await async_session.commit()
+    await async_session.refresh(other)
+
+    token = _auth_token(other)
+    res = await client_with_db.patch(
+        f"/api/v1/projects/{proj.id}/git-settings",
+        json={"plan_path": "x.md"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
