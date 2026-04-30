@@ -747,3 +747,35 @@ async def test_process_event_no_change_when_checked_and_already_done(
         select(TaskEvent).where(TaskEvent.task_id == existing.id)
     )).scalars().all()
     assert len(events) == 0
+
+
+async def test_collect_changed_files_uses_before_sha_when_truncated(async_session: AsyncSession):
+    """commits_truncated 시 before_commit_sha 가 base 로 사용됨 (Phase 5a 보강)."""
+    proj = await _seed_project(async_session)
+    captured: dict[str, str] = {}
+
+    async def fake_compare(repo_url, pat, base, head):
+        captured["base"] = base
+        captured["head"] = head
+        return ["PLAN.md"]
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return None  # PLAN 변경됐다고만 알려주고 fetch 는 404 → silent skip
+
+    event = await _seed_event(
+        async_session, proj,
+        head_sha="b" * 40,
+        commits_truncated=True,
+        commits=[{"id": "c" * 40, "modified": []}],
+    )
+    event.before_commit_sha = "a" * 40
+    await async_session.commit()
+    await async_session.refresh(event)
+
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=fake_compare,
+    )
+
+    assert captured["base"] == "a" * 40  # before_commit_sha 우선
+    assert captured["head"] == "b" * 40

@@ -193,3 +193,14 @@ async def test_record_push_event_commits_truncated_false_at_19(
     event = await record_push_event(async_session, proj, payload)
     assert event is not None
     assert event.commits_truncated is False
+
+
+async def test_record_push_event_stores_before_commit_sha(async_session: AsyncSession):
+    proj = await _seed_workspace_with_project(
+        async_session, "https://github.com/ardenspace/app-chak"
+    )
+    payload = _payload(head_id="a" * 40)
+    event = await record_push_event(async_session, proj, payload)
+    assert event is not None
+    assert event.before_commit_sha == payload.before
+    assert event.before_commit_sha == "0" * 40  # fixture 의 값
