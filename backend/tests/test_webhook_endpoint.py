@@ -280,3 +280,31 @@ async def test_webhook_non_push_event_returns_200_ignored(
     # DB 미저장
     rows = (await async_session.execute(select(GitPushEvent))).scalars().all()
     assert len(rows) == 0
+
+
+async def test_webhook_triggers_background_sync(
+    client_with_db, async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+):
+    """webhook 정상 처리 → BackgroundTasks 가 sync_service.process_event 호출."""
+    secret = "valid-secret"
+    proj = await _seed_project_with_secret(
+        async_session, "https://github.com/ardenspace/app-chak", secret
+    )
+    sig = _sign(FIXTURE, secret)
+
+    called_with: list[str] = []
+
+    async def fake_run_sync(event_id):
+        called_with.append(str(event_id))
+
+    import app.api.v1.endpoints.webhooks as webhooks_module
+    monkeypatch.setattr(webhooks_module, "_run_sync_in_new_session", fake_run_sync)
+
+    res = await client_with_db.post(
+        "/api/v1/webhooks/github",
+        content=FIXTURE,
+        headers={"X-Hub-Signature-256": sig, "X-GitHub-Event": "push"},
+    )
+    assert res.status_code == 200
+    # ASGITransport awaits BackgroundTasks before returning
+    assert len(called_with) == 1

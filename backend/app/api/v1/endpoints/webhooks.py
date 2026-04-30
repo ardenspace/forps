@@ -11,17 +11,21 @@
 import logging
 
 from cryptography.fernet import InvalidToken
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crypto import decrypt_secret
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.schemas.webhook import GitHubPushPayload
+from app.services.git_repo_service import fetch_compare_files, fetch_file
 from app.services.github_webhook_service import (
     find_project_by_repo_url,
     record_push_event,
     verify_signature,
 )
+from app.services.sync_service import process_event
+from app.models.git_push_event import GitPushEvent
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +35,7 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 @router.post("/github")
 async def receive_github_push(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     x_hub_signature_256: str | None = Header(default=None, alias="X-Hub-Signature-256"),
     x_github_event: str | None = Header(default=None, alias="X-GitHub-Event"),
@@ -81,4 +86,24 @@ async def receive_github_push(
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     event = await record_push_event(db, project, payload)
+    if event is not None:
+        background_tasks.add_task(_run_sync_in_new_session, event.id)
     return {"status": "received", "event_id": str(event.id) if event else None}
+
+
+async def _run_sync_in_new_session(event_id):
+    """BackgroundTask 진입점 — 자체 세션 + 실제 fetcher 주입."""
+    try:
+        async with AsyncSessionLocal() as db:
+            event = (await db.execute(
+                select(GitPushEvent).where(GitPushEvent.id == event_id)
+            )).scalar_one_or_none()
+            if event is None:
+                return
+            await process_event(
+                db, event,
+                fetch_file=fetch_file,
+                fetch_compare=fetch_compare_files,
+            )
+    except Exception:
+        logger.exception("background sync failed for event %s", event_id)

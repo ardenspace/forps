@@ -128,10 +128,10 @@ def test_alembic_downgrade_then_upgrade_roundtrip(patched_alembic_config):
 
 
 def test_downgrade_drops_phase1_objects(patched_alembic_config):
-    """downgrade -1 후 phase1 객체가 모두 사라진다."""
+    """phase1 직전 revision 으로 downgrade 후 phase1 객체가 모두 사라진다."""
     cfg = patched_alembic_config
     command.upgrade(cfg, "head")
-    command.downgrade(cfg, "-1")
+    command.downgrade(cfg, "be8724268ae4")  # phase1(c4dee7f06004) 직전 revision
 
     conn = _sync_conn_from_config(cfg)
     with conn.cursor() as cur:
