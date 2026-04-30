@@ -570,3 +570,62 @@ async def test_reprocess_403_for_non_owner(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# code review permission audit: non-member 404 tests
+# ---------------------------------------------------------------------------
+
+async def test_post_webhook_404_for_non_member(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session)
+    proj.git_repo_url = "https://github.com/ardenspace/app-chak"
+    proj.github_pat_encrypted = encrypt_secret("ghp_test_token")
+    await async_session.commit()
+
+    other = User(
+        email=f"o-{uuid.uuid4().hex[:8]}@example.com",
+        name="bob",
+        password_hash="x",
+    )
+    async_session.add(other)
+    await async_session.commit()
+    await async_session.refresh(other)
+
+    token = _auth_token(other)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-settings/webhook",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
+
+
+async def test_reprocess_404_for_non_member(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session)
+    event = GitPushEvent(
+        project_id=proj.id, branch="main", head_commit_sha="a" * 40,
+        commits=[], commits_truncated=False, pusher="alice",
+        processed_at=datetime.utcnow(), error="x",
+    )
+    async_session.add(event)
+    await async_session.commit()
+    await async_session.refresh(event)
+
+    other = User(
+        email=f"o-{uuid.uuid4().hex[:8]}@example.com",
+        name="bob",
+        password_hash="x",
+    )
+    async_session.add(other)
+    await async_session.commit()
+    await async_session.refresh(other)
+
+    token = _auth_token(other)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-events/{event.id}/reprocess",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404

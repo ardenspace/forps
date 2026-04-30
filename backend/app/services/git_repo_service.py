@@ -33,11 +33,20 @@ def _auth_headers(pat: str | None) -> dict[str, str]:
 
 
 def _raise_for_status(res: httpx.Response, request: httpx.Request) -> None:
-    """raise_for_status() 대체 — mock 환경에서도 안전하게 HTTPStatusError를 발생시킨다."""
+    """raise_for_status() 대체 — mock 환경에서도 안전하게 HTTPStatusError를 발생시킨다.
+
+    Phase 5a code review I-1: Authorization 헤더는 raised exception 에 포함되지 않게 sanitize.
+    """
     if res.status_code >= 400:
+        sanitized_headers = {
+            k: v for k, v in request.headers.items() if k.lower() != "authorization"
+        }
+        sanitized_request = httpx.Request(
+            request.method, request.url, headers=sanitized_headers
+        )
         raise httpx.HTTPStatusError(
             message=f"HTTP {res.status_code}",
-            request=request,
+            request=sanitized_request,
             response=res,
         )
 

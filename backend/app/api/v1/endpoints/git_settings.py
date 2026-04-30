@@ -37,6 +37,10 @@ def _public_webhook_url() -> str:
     return f"{base}/api/v1/webhooks/github"
 
 
+def _normalize_url(url: str) -> str:
+    return url.rstrip("/").lower()
+
+
 @router.get("/{project_id}/git-settings", response_model=GitSettingsResponse)
 async def get_git_settings(
     project_id: UUID,
@@ -142,8 +146,9 @@ async def register_webhook(
     new_secret = generate_webhook_secret()
 
     existing_hooks = await github_hook_service.list_hooks(project.git_repo_url, pat)
+    target = _normalize_url(callback_url)
     matching = next(
-        (h for h in existing_hooks if h.get("config", {}).get("url") == callback_url),
+        (h for h in existing_hooks if _normalize_url(h.get("config", {}).get("url") or "") == target),
         None,
     )
 
