@@ -336,3 +336,121 @@ async def test_post_webhook_403_for_non_owner(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Task 6: GET /handoffs — handoff 이력 조회
+# ---------------------------------------------------------------------------
+
+from datetime import datetime, timedelta
+
+from app.models.handoff import Handoff
+
+
+async def test_get_handoffs_returns_summary_list(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session)
+    now = datetime.utcnow()
+    h1 = Handoff(
+        project_id=proj.id,
+        branch="main",
+        author_git_login="alice",
+        commit_sha="a" * 40,
+        pushed_at=now,
+        parsed_tasks=[{"external_id": "task-001", "checked": True}],
+        free_notes={"last_commit": "x"},
+        raw_content="raw",
+    )
+    h2 = Handoff(
+        project_id=proj.id,
+        branch="feature/login",
+        author_git_login="bob",
+        commit_sha="b" * 40,
+        pushed_at=now - timedelta(hours=1),
+        parsed_tasks=[
+            {"external_id": "t-1"},
+            {"external_id": "t-2"},
+        ],
+        free_notes={},
+        raw_content="raw",
+    )
+    async_session.add_all([h1, h2])
+    await async_session.commit()
+
+    token = _auth_token(user)
+    res = await client_with_db.get(
+        f"/api/v1/projects/{proj.id}/handoffs",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    items = res.json()
+    assert len(items) == 2
+    # pushed_at desc — h1 이 더 최근
+    assert items[0]["commit_sha"] == "a" * 40
+    assert items[0]["parsed_tasks_count"] == 1
+    assert items[1]["commit_sha"] == "b" * 40
+    assert items[1]["parsed_tasks_count"] == 2
+    # raw_content 본체는 응답에 없음
+    assert "raw_content" not in items[0]
+    assert "raw" not in res.text
+
+
+async def test_get_handoffs_filters_by_branch(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session)
+    now = datetime.utcnow()
+    async_session.add_all([
+        Handoff(
+            project_id=proj.id, branch="main", author_git_login="a",
+            commit_sha="1" * 40, pushed_at=now, parsed_tasks=[], free_notes={},
+        ),
+        Handoff(
+            project_id=proj.id, branch="feature/x", author_git_login="b",
+            commit_sha="2" * 40, pushed_at=now, parsed_tasks=[], free_notes={},
+        ),
+    ])
+    await async_session.commit()
+
+    token = _auth_token(user)
+    res = await client_with_db.get(
+        f"/api/v1/projects/{proj.id}/handoffs?branch=feature/x",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    items = res.json()
+    assert len(items) == 1
+    assert items[0]["branch"] == "feature/x"
+
+
+async def test_get_handoffs_404_for_non_member(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session)
+    other = User(
+        email=f"o-{uuid.uuid4().hex[:8]}@example.com", name="bob", password_hash="x"
+    )
+    async_session.add(other)
+    await async_session.commit()
+    await async_session.refresh(other)
+
+    token = _auth_token(other)
+    res = await client_with_db.get(
+        f"/api/v1/projects/{proj.id}/handoffs",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
+
+
+async def test_get_handoffs_limit_clamped_to_max(
+    client_with_db, async_session: AsyncSession
+):
+    """limit > 200 도 200 으로 clamp — 422 안 남."""
+    user, proj = await _seed_user_project(async_session)
+    token = _auth_token(user)
+    res = await client_with_db.get(
+        f"/api/v1/projects/{proj.id}/handoffs?limit=99999",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200

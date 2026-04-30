@@ -8,13 +8,20 @@ from uuid import UUID
 
 from cryptography.fernet import InvalidToken
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.crypto import decrypt_secret, encrypt_secret, generate_webhook_secret
 from app.database import get_db
 from app.dependencies import CurrentUser
-from app.schemas.git_settings import GitSettingsResponse, GitSettingsUpdate, WebhookRegisterResponse
+from app.models.handoff import Handoff
+from app.schemas.git_settings import (
+    GitSettingsResponse,
+    GitSettingsUpdate,
+    HandoffSummary,
+    WebhookRegisterResponse,
+)
 from app.services import github_hook_service, project_service
 from app.services.permission_service import can_manage, get_effective_role
 
@@ -162,3 +169,44 @@ async def register_webhook(
         was_existing=was_existing,
         public_webhook_url=callback_url,
     )
+
+
+@router.get("/{project_id}/handoffs", response_model=list[HandoffSummary])
+async def list_handoffs(
+    project_id: UUID,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    branch: str | None = None,
+    limit: int = 50,
+):
+    """프로젝트의 handoff 이력 조회 (branch 필터 + limit clamp)."""
+    project = await project_service.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    role = await get_effective_role(db, user.id, project_id)
+    if role is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    limit = max(1, min(limit, 200))
+
+    stmt = (
+        select(Handoff)
+        .where(Handoff.project_id == project_id)
+        .order_by(Handoff.pushed_at.desc())
+        .limit(limit)
+    )
+    if branch is not None:
+        stmt = stmt.where(Handoff.branch == branch)
+
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        HandoffSummary(
+            id=h.id,
+            branch=h.branch,
+            author_git_login=h.author_git_login,
+            commit_sha=h.commit_sha,
+            pushed_at=h.pushed_at,
+            parsed_tasks_count=len(h.parsed_tasks or []),
+        )
+        for h in rows
+    ]
