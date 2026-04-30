@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.models.task import TaskStatus
+from app.models.task import TaskSource, TaskStatus
 
 
 class UserBrief(BaseModel):
@@ -49,6 +49,11 @@ class TaskResponse(BaseModel):
     updated_at: datetime
     assignee: UserBrief | None = None
     reporter: UserBrief | None = None
+    # Phase 5b — frontend 가 source 배지 / git 연동 정보 표시 (Phase 1 모델 누락분 노출)
+    source: TaskSource = TaskSource.MANUAL
+    external_id: str | None = None
+    last_commit_sha: str | None = None
+    archived_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
