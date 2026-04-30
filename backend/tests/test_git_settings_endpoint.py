@@ -454,3 +454,119 @@ async def test_get_handoffs_limit_clamped_to_max(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Task 7: POST /git-events/{id}/reprocess — 수동 재처리
+# ---------------------------------------------------------------------------
+
+from app.models.git_push_event import GitPushEvent
+
+
+async def test_reprocess_resets_event_and_queues_sync(
+    client_with_db, async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+):
+    """processed_at + error reset 후 BackgroundTask 로 sync 호출 큐."""
+    user, proj = await _seed_user_project(async_session)
+    event = GitPushEvent(
+        project_id=proj.id,
+        branch="main",
+        head_commit_sha="a" * 40,
+        commits=[],
+        commits_truncated=False,
+        pusher="alice",
+        processed_at=datetime.utcnow(),
+        error="MalformedHandoffError: bad header",
+    )
+    async_session.add(event)
+    await async_session.commit()
+    await async_session.refresh(event)
+
+    called: list[str] = []
+
+    async def fake_run(event_id):
+        called.append(str(event_id))
+
+    import app.api.v1.endpoints.webhooks as webhooks_module
+    monkeypatch.setattr(webhooks_module, "_run_sync_in_new_session", fake_run)
+
+    token = _auth_token(user)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-events/{event.id}/reprocess",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["event_id"] == str(event.id)
+    assert body["status"] == "queued"
+
+    await async_session.refresh(event)
+    assert event.processed_at is None
+    assert event.error is None
+    assert len(called) == 1
+
+
+async def test_reprocess_400_when_already_succeeded(
+    client_with_db, async_session: AsyncSession
+):
+    """processed_at set + error None (성공 처리) → 400."""
+    user, proj = await _seed_user_project(async_session)
+    event = GitPushEvent(
+        project_id=proj.id, branch="main", head_commit_sha="a" * 40,
+        commits=[], commits_truncated=False, pusher="alice",
+        processed_at=datetime.utcnow(),
+        error=None,
+    )
+    async_session.add(event)
+    await async_session.commit()
+    await async_session.refresh(event)
+
+    token = _auth_token(user)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-events/{event.id}/reprocess",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 400
+
+
+async def test_reprocess_404_for_event_in_different_project(
+    client_with_db, async_session: AsyncSession
+):
+    """다른 프로젝트의 event id 를 자기 프로젝트 path 로 호출 → 404."""
+    user, proj = await _seed_user_project(async_session)
+    _, other_proj = await _seed_user_project(async_session)
+    event = GitPushEvent(
+        project_id=other_proj.id, branch="main", head_commit_sha="a" * 40,
+        commits=[], commits_truncated=False, pusher="alice",
+    )
+    async_session.add(event)
+    await async_session.commit()
+    await async_session.refresh(event)
+
+    token = _auth_token(user)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-events/{event.id}/reprocess",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
+
+
+async def test_reprocess_403_for_non_owner(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session, role=WorkspaceRole.EDITOR)
+    event = GitPushEvent(
+        project_id=proj.id, branch="main", head_commit_sha="a" * 40,
+        commits=[], commits_truncated=False, pusher="alice",
+        processed_at=datetime.utcnow(), error="x",
+    )
+    async_session.add(event)
+    await async_session.commit()
+    await async_session.refresh(event)
+
+    token = _auth_token(user)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-events/{event.id}/reprocess",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 403

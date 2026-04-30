@@ -7,7 +7,7 @@ import logging
 from uuid import UUID
 
 from cryptography.fernet import InvalidToken
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,11 +15,13 @@ from app.config import settings
 from app.core.crypto import decrypt_secret, encrypt_secret, generate_webhook_secret
 from app.database import get_db
 from app.dependencies import CurrentUser
+from app.models.git_push_event import GitPushEvent
 from app.models.handoff import Handoff
 from app.schemas.git_settings import (
     GitSettingsResponse,
     GitSettingsUpdate,
     HandoffSummary,
+    ReprocessResponse,
     WebhookRegisterResponse,
 )
 from app.services import github_hook_service, project_service
@@ -210,3 +212,46 @@ async def list_handoffs(
         )
         for h in rows
     ]
+
+
+@router.post(
+    "/{project_id}/git-events/{event_id}/reprocess",
+    response_model=ReprocessResponse,
+)
+async def reprocess_git_event(
+    project_id: UUID,
+    event_id: UUID,
+    background_tasks: BackgroundTasks,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """실패한 git push event 를 수동으로 재처리 큐에 추가 (OWNER 전용)."""
+    project = await project_service.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    role = await get_effective_role(db, user.id, project_id)
+    if role is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not can_manage(role):
+        raise HTTPException(status_code=403, detail="Owner only")
+
+    event = await db.get(GitPushEvent, event_id)
+    if event is None or event.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if event.processed_at is not None and event.error is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Event already processed successfully — nothing to reprocess",
+        )
+
+    event.processed_at = None
+    event.error = None
+    await db.commit()
+
+    # BackgroundTask — Phase 4 webhook endpoint 의 _run_sync_in_new_session 재사용.
+    # module-level 참조를 통해 호출해야 테스트 monkeypatch 가 동작함.
+    from app.api.v1.endpoints import webhooks as webhooks_module
+    background_tasks.add_task(webhooks_module._run_sync_in_new_session, event_id)
+
+    return ReprocessResponse(event_id=event_id, status="queued")
