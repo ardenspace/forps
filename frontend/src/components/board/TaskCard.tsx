@@ -24,7 +24,17 @@ export function TaskCard({ task, onClick, isDragDisabled = false }: TaskCardProp
       }`}
       onClick={onClick}
     >
-      <h4 className="font-bold text-xs sm:text-sm break-words">{task.title}</h4>
+      <h4 className="font-bold text-xs sm:text-sm break-words">
+        {task.title}
+        {task.source === 'synced_from_plan' && (
+          <span
+            className="ml-1 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700"
+            title="PLAN.md 에서 자동 동기화된 태스크"
+          >
+            PLAN
+          </span>
+        )}
+      </h4>
       {task.assignee && (
         <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 break-words">{task.assignee.name}</p>
       )}
