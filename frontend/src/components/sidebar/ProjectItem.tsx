@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useDeleteProject } from '@/hooks/useProjects';
 import { EditProjectModal } from '@/components/sidebar/EditProjectModal';
+import { ProjectGitSettingsModal } from '@/components/sidebar/ProjectGitSettingsModal';
+import { HandoffHistoryModal } from '@/components/sidebar/HandoffHistoryModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import type { Project } from '@/types/project';
 
@@ -15,6 +17,8 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isEditModalOpen, setEditModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isGitSettingsOpen, setGitSettingsOpen] = useState(false);
+  const [isHandoffOpen, setHandoffOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const deleteProject = useDeleteProject(workspaceId);
 
@@ -65,7 +69,7 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
           </button>
 
           {isMenuOpen && (
-            <div className="absolute right-0 top-full mt-1 z-50 min-w-[100px] border-2 border-black bg-white shadow-[2px_2px_0px_0px_rgba(244,0,4,1)]">
+            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] border-2 border-black bg-white shadow-[2px_2px_0px_0px_rgba(244,0,4,1)]">
               <button
                 type="button"
                 className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-yellow-50 transition-colors"
@@ -76,6 +80,28 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
                 }}
               >
                 수정
+              </button>
+              <button
+                type="button"
+                className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-yellow-50 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  setGitSettingsOpen(true);
+                }}
+              >
+                Git 연동 설정
+              </button>
+              <button
+                type="button"
+                className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-yellow-50 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  setHandoffOpen(true);
+                }}
+              >
+                Handoff 이력
               </button>
               <button
                 type="button"
@@ -100,6 +126,18 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
         initialDescription={project.description ?? ''}
         isOpen={isEditModalOpen}
         onClose={() => setEditModalOpen(false)}
+      />
+
+      <ProjectGitSettingsModal
+        projectId={project.id}
+        open={isGitSettingsOpen}
+        onClose={() => setGitSettingsOpen(false)}
+      />
+
+      <HandoffHistoryModal
+        projectId={project.id}
+        open={isHandoffOpen}
+        onClose={() => setHandoffOpen(false)}
       />
 
       <ConfirmModal
