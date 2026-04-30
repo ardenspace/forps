@@ -609,3 +609,141 @@ async def test_process_event_records_error_on_duplicate_external_id(
     assert event.error is not None
     assert "DuplicateExternalIdError" in event.error
     assert event.processed_at is not None
+
+
+async def test_process_event_unarchives_task_when_re_added_to_plan(
+    async_session: AsyncSession,
+):
+    """code review I-1: archived task 가 PLAN 에 다시 등장하면 un-archive (재INSERT 안 함, IntegrityError 안 남)."""
+    proj = await _seed_project(async_session)
+    archived = Task(
+        project_id=proj.id,
+        title="이전 archived",
+        source=TaskSource.SYNCED_FROM_PLAN,
+        external_id="task-001",
+        status=TaskStatus.TODO,
+        archived_at=datetime.utcnow() - timedelta(days=1),
+    )
+    async_session.add(archived)
+    await async_session.commit()
+    await async_session.refresh(archived)
+    archived_id = archived.id
+
+    plan_text = "## 태스크\n\n- [ ] [task-001] 다시 등장 — @alice\n"
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}]
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+    await async_session.refresh(event)
+    assert event.error is None  # IntegrityError 안 발생
+
+    # 같은 row 가 un-archive 됨 (재INSERT 아님)
+    rows = (await async_session.execute(
+        select(Task).where(Task.project_id == proj.id, Task.external_id == "task-001")
+    )).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].id == archived_id
+    assert rows[0].archived_at is None
+
+
+async def test_process_event_records_error_even_when_session_poisoned(
+    async_session: AsyncSession,
+):
+    """code review I-2: _apply_plan 안에서 IntegrityError 가 나도 event.error / processed_at 가 영구 저장됨."""
+    proj = await _seed_project(async_session)
+
+    # 시나리오: source=SYNCED_FROM_PLAN, archived_at=None 이지만 PLAN 의 task 와는 별개 external_id —
+    # 이 task 는 partial UNIQUE 에 걸리지 않음. 대신 manual force IntegrityError 시뮬레이션:
+    # 같은 commit_sha 로 Handoff 가 미리 들어가있으면 _apply_handoff 가 SAVEPOINT 로 흡수해서 통과 — 부적합.
+    # 대신 archived 가 있는 상태에서 (I-1 미수정 상태라면) IntegrityError 강제. I-1 fix 후엔 이 시나리오가
+    # un-archive 로 통과. 따라서 I-2 단독 회귀는 monkeypatch 로 _apply_plan 을 force-raise.
+
+    import app.services.sync_service as sync_mod
+
+    original_apply_plan = sync_mod._apply_plan
+
+    async def boom(db, project, event, plan_text):
+        # 진짜 IntegrityError 처럼 — 세션이 poisoned 상태로 진입하도록 유사 INSERT 후 중복 INSERT
+        from app.models.task import Task as TaskModel, TaskSource as TS
+        t1 = TaskModel(
+            project_id=project.id, title="x", source=TS.SYNCED_FROM_PLAN,
+            external_id="task-DUP",
+        )
+        db.add(t1)
+        await db.flush()
+        t2 = TaskModel(
+            project_id=project.id, title="x2", source=TS.SYNCED_FROM_PLAN,
+            external_id="task-DUP",
+        )
+        db.add(t2)
+        await db.flush()  # IntegrityError raise
+
+    plan_text = "## 태스크\n\n- [ ] [task-001] anything — @alice\n"
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}]
+    )
+    event_id = event.id  # process_event 호출 전에 id 저장 — 세션 상태 변화와 무관하게 접근 가능
+
+    sync_mod._apply_plan = boom
+    try:
+        await process_event(
+            async_session, event,
+            fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+        )
+    finally:
+        sync_mod._apply_plan = original_apply_plan
+
+    # DB 에서 직접 재조회 — event 객체 상태와 무관하게 영구 저장 확인
+    refetched = (await async_session.execute(
+        select(GitPushEvent).where(GitPushEvent.id == event_id)
+    )).scalar_one()
+    assert refetched.processed_at is not None
+    assert refetched.error is not None
+    assert "IntegrityError" in refetched.error or "Integrity" in refetched.error
+
+
+async def test_process_event_no_change_when_checked_and_already_done(
+    async_session: AsyncSession,
+):
+    """code review M-5: 이미 DONE 인 task 가 PLAN 에서 [x] → 변경 없음, TaskEvent 도 안 만듦."""
+    proj = await _seed_project(async_session)
+    existing = Task(
+        project_id=proj.id, title="이미 완료", source=TaskSource.SYNCED_FROM_PLAN,
+        external_id="task-DONE", status=TaskStatus.DONE,
+    )
+    async_session.add(existing)
+    await async_session.commit()
+    await async_session.refresh(existing)
+    initial_last_sha = existing.last_commit_sha
+
+    plan_text = "## 태스크\n\n- [x] [task-DONE] 이미 완료 — @alice\n"
+
+    async def fake_fetch_file(repo_url, pat, sha, path):
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}]
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+    await async_session.refresh(existing)
+
+    assert existing.status == TaskStatus.DONE  # 보존
+    assert existing.last_commit_sha == initial_last_sha  # last_commit_sha 도 안 바뀜
+    events = (await async_session.execute(
+        select(TaskEvent).where(TaskEvent.task_id == existing.id)
+    )).scalars().all()
+    assert len(events) == 0

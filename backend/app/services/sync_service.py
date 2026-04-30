@@ -47,15 +47,28 @@ async def process_event(
         await db.commit()
         return
 
+    event_id = event.id  # 세션 poison 후 expire 대비
+
     try:
         await _process_inner(db, event, project, fetch_file=fetch_file, fetch_compare=fetch_compare)
         event.processed_at = datetime.utcnow()
+        await db.commit()
     except Exception as exc:
-        event.processed_at = datetime.utcnow()
-        event.error = f"{type(exc).__name__}: {exc}"
-        logger.exception("sync failed for event %s", event.id)
-
-    await db.commit()
+        # I-2 fix: _process_inner 내부에서 예외 발생 시 세션이 poisoned 상태일 수 있음.
+        # rollback → SQLAlchemy 가 pending/new 객체를 identity map 에서 자동 제거.
+        # event 는 persistent 상태로 남음. autoflush=False 로 commit 전 autoflush 유발 방지.
+        logger.exception("sync failed for event %s", event_id)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        db.sync_session.autoflush = False
+        now = datetime.utcnow()
+        error_msg = f"{type(exc).__name__}: {exc}"
+        event.processed_at = now
+        event.error = error_msg
+        await db.commit()
+        db.sync_session.autoflush = True
 
 
 async def _process_inner(
@@ -169,7 +182,6 @@ async def _apply_plan(
         select(Task).where(
             Task.project_id == project.id,
             Task.source == TaskSource.SYNCED_FROM_PLAN,
-            Task.archived_at.is_(None),
         )
     )).scalars().all()
     existing: dict[str, Task] = {t.external_id: t for t in rows if t.external_id}
@@ -200,6 +212,10 @@ async def _apply_plan(
             ))
         else:
             previous_status = existing_task.status
+            # I-1 fix: archived 였으면 un-archive (재 INSERT 아님 — 히스토리 보존)
+            if existing_task.archived_at is not None:
+                existing_task.archived_at = None
+                # un-archive 자체는 status 변경 없음 — 아래 status 전이 규칙이 그대로 적용됨
             if parsed_task.checked and previous_status != TaskStatus.DONE:
                 existing_task.status = TaskStatus.DONE
                 existing_task.last_commit_sha = event.head_commit_sha

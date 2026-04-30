@@ -20,15 +20,28 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Startup: 미처리 push event 회수 (Phase 4 — sync_service 콜백 주입)
     try:
-        async with AsyncSessionLocal() as db:
-            async def _cb(ev):
+        from sqlalchemy import select
+
+        from app.models.git_push_event import GitPushEvent
+
+        async def _cb(ev: GitPushEvent) -> None:
+            # I-3 fix: 이벤트마다 fresh session — 한 이벤트의 세션 poison 이 다음으로 전파 안 되게
+            event_id = ev.id
+            async with AsyncSessionLocal() as inner_db:
+                refetched = (await inner_db.execute(
+                    select(GitPushEvent).where(GitPushEvent.id == event_id)
+                )).scalar_one_or_none()
+                if refetched is None:
+                    return
                 await process_event(
-                    db, ev,
+                    inner_db, refetched,
                     fetch_file=fetch_file,
                     fetch_compare=fetch_compare_files,
                 )
-            reaped = await reap_pending_events(db, _cb)
-            await db.commit()
+
+        async with AsyncSessionLocal() as outer_db:
+            reaped = await reap_pending_events(outer_db, _cb)
+
         if reaped:
             logger.info("startup reaper picked up %d pending push events", reaped)
     except Exception:
