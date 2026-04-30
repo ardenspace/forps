@@ -35,7 +35,16 @@ async def process_event(
     fetch_file: FetchFile,
     fetch_compare: FetchCompare,
 ) -> None:
-    """진입점. 멱등 + 결정적 — 같은 event 두 번 호출해도 DB 변경 1회만."""
+    """진입점. 멱등 + 결정적 — 같은 event 두 번 호출해도 DB 변경 1회만.
+
+    B1 / I-4 layer 2: 진입 시 row-level lock 획득 (FOR UPDATE) 후 processed_at 재확인.
+    동시 호출 시 후행 caller 는 lock 대기 → 선행 caller commit 후 processed_at 갱신본 보고 return.
+    final commit 시 lock release. process_event 가 단일 outer commit 구조라 그대로 적용 가능.
+    """
+    # FOR UPDATE 로 row 점유 — 동시 caller 차단.
+    # SQLAlchemy 2.0: db.refresh(obj, with_for_update=...). nowait=False 로 lock 대기.
+    await db.refresh(event, with_for_update={"nowait": False})
+
     if event.processed_at is not None:
         logger.info("event %s already processed at %s — skip", event.id, event.processed_at)
         return
