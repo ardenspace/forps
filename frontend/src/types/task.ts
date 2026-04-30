@@ -9,6 +9,13 @@ export const TASK_STATUS = {
 
 export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
 
+export const TASK_SOURCE = {
+  MANUAL: 'manual',
+  SYNCED_FROM_PLAN: 'synced_from_plan',
+} as const;
+
+export type TaskSource = (typeof TASK_SOURCE)[keyof typeof TASK_SOURCE];
+
 export interface Task {
   id: string;
   project_id: string;
@@ -22,6 +29,11 @@ export interface Task {
   updated_at: string;
   assignee: UserBrief | null;
   reporter: UserBrief | null;
+  // Phase 5b — backend Phase 1 모델 필드 노출
+  source: TaskSource;
+  external_id: string | null;
+  last_commit_sha: string | null;
+  archived_at: string | null;
 }
 
 export interface TaskCreate {
