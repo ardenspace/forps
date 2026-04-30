@@ -629,3 +629,29 @@ async def test_reprocess_404_for_non_member(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 404
+
+
+async def test_reprocess_409_when_still_in_flight(
+    client_with_db, async_session: AsyncSession
+):
+    """processed_at IS NULL (= 초기 BackgroundTask 가 아직 처리 중) 인 event 의 reprocess 는 409.
+    User 가 webhook 직후 BackgroundTask 가 끝나기 전 클릭한 case 차단 (B1 / I-4 layer 1)."""
+    user, proj = await _seed_user_project(async_session)
+    event = GitPushEvent(
+        project_id=proj.id, branch="main", head_commit_sha="a" * 40,
+        commits=[], commits_truncated=False, pusher="alice",
+        processed_at=None,  # 아직 처리 중
+        error=None,
+    )
+    async_session.add(event)
+    await async_session.commit()
+    await async_session.refresh(event)
+
+    token = _auth_token(user)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-events/{event.id}/reprocess",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 409
+    detail = res.json()["detail"].lower()
+    assert "still" in detail or "processing" in detail

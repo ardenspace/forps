@@ -244,6 +244,16 @@ async def reprocess_git_event(
     if event is None or event.project_id != project_id:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    # B1 / I-4 layer 1: in-flight 거부.
+    # processed_at IS NULL = 초기 BackgroundTask 가 아직 처리 중이거나 reaper 회수 대기.
+    # 이 시점에 reprocess 트리거하면 두 process_event 가 같은 event 로 동시 실행 → TaskEvent 중복.
+    # reaper 가 5분 grace 후 회수 가능하므로 사용자는 기다리거나 재처리 대신 reaper 에 위임.
+    if event.processed_at is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Event is still being processed — wait for completion or reaper",
+        )
+
     if event.processed_at is not None and event.error is None:
         raise HTTPException(
             status_code=400,
