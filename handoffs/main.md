@@ -1,5 +1,57 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-04-30 (Phase 5b)
+
+- [x] **Phase 5b 완료** — Frontend UI (브랜치 `feature/phase-5b-frontend-ui`)
+  - [x] **Backend small change**: `TaskResponse` 에 Phase 1 모델 누락 4 필드 노출 (`source / external_id / last_commit_sha / archived_at`) + 회귀 테스트 1건
+  - [x] frontend `types/task.ts` 확장 + `TASK_SOURCE` enum (`'manual'` / `'synced_from_plan'`) + `types/git.ts` 신규 (5 인터페이스: GitSettings/Update/WebhookRegisterResponse/HandoffSummary/ReprocessResponse)
+  - [x] `services/api.ts` 의 `git` 그룹 5 method (getSettings / updateSettings / registerWebhook / listHandoffs / reprocessEvent)
+  - [x] `hooks/useGithubSettings.ts` — TanStack Query 5 훅 (`useGitSettings`, `useUpdateGitSettings`, `useRegisterWebhook`, `useHandoffs`, `useReprocessEvent`)
+  - [x] `ProjectGitSettingsModal.tsx` — outer + inner `GitSettingsForm` (lint 회피 split). repo URL / PAT / plan_path / handoff_dir 폼 + Save + Webhook 등록 버튼 (`admin:repo_hook` 가이드 + GitHub PAT 페이지 링크)
+  - [x] `HandoffHistoryModal.tsx` — branch 필터 + 표 (날짜 / 브랜치 / 작성자 / commit / tasks count) + 빈 상태 안내
+  - [x] `TaskCard.tsx` — `SYNCED_FROM_PLAN` 배지 (파란색, `MANUAL` 은 기본 표시 X)
+  - [x] `ProjectItem.tsx` 메뉴 통합 — 기존 `···` dropdown 에 "Git 연동 설정" + "Handoff 이력" 추가. 비-OWNER 는 메뉴 자체 숨김 (`{isOwner && ...}`).
+  - [x] code review (sonnet) APPROVED — fixed I-1 (`webhookDisabled` 가 live `repoUrl` state 사용 — 사용자 즉시 enable) + M-3 (TASK_SOURCE 상수) + M-4 (dropdown min-w 140px) + M-1 (stale comment).
+  - [x] **검증**: backend 170 tests pass, frontend `bun run build` clean, `bun run lint` 8 pre-existing (out of scope). **시각 검증은 사용자 dev server 직접** (PR 본문 체크리스트).
+
+### 마지막 커밋
+
+- forps: `<sha> docs(handoff): Phase 5b 완료 + Phase 6 다음 할 일`
+- 브랜치 base: `900fa20` (main, Phase 5a 머지 직후)
+
+### 다음 (Phase 6 — Discord 알림 통합 또는 Phase 5 follow-up)
+
+**옵션 A — Phase 6 (Discord 알림 통합, spec §11)**:
+- [ ] `discord_service` 확장 — 체크 변경 요약 / handoff 누락 경고 / 롤백 알림 템플릿 3종
+- [ ] `sync_service` 가 알림 트리거 (DB 변경 후 fire-and-forget BackgroundTask)
+- [ ] `Project.discord_webhook_url` 미설정 시 silent skip
+- [ ] cooldown 정책 (spec §8 — 3회 연속 실패 시 disable)
+
+**옵션 B — Phase 5 follow-up fixes** (Phase 5a/5b code review 트래킹):
+- [ ] **I-2 fix**: `register_webhook` SELECT FOR UPDATE → 동시 호출 race 차단
+- [ ] **I-4 fix**: `process_event` CAS 가드 → reprocess race 차단
+- [ ] **M-6 fix**: `sync_service` 가 처리 완료 시 `Project.last_synced_commit_sha` update (Phase 1 부터 미사용 컬럼)
+- [ ] **M-10 fix**: `_auth_headers / _parse_repo / _raise_for_status` 를 public 으로 promote (`github_hook_service` 의 underscore import 위배 해소)
+- [ ] **TaskCard ⚠️ handoff 누락 표시**: 데이터 정의 (Task `last_commit_sha` join → Handoff 존재 여부 — backend 필드 또는 계산 추가)
+- [ ] **GitEventList 모달 + reprocess 호출 site**: `useReprocessEvent` hook 만 만들어둠 — 호출 site (sync 실패 이벤트 list 모달) 미구현
+
+### 블로커
+
+없음
+
+### 메모 (2026-04-30 Phase 5b 추가)
+
+- **Modal 진입 패턴**: spec §5.3 의 `pages/` 권고 무시, 코드베이스 컨벤션 (sidebar dropdown + 모달) 따름. `EditProjectModal` 스타일/구조 정확 매칭.
+- **PAT 평문 입력 → setPat('') after save**: 응답에 PAT 절대 포함 안 됨 (Phase 5a backend redact 검증). frontend 도 console.log / queryKey 등 어디에도 PAT 누출 안 됨 (review 검증).
+- **Outer + Inner `GitSettingsForm` split**: `useEffect([settings])` + `setState` 패턴이 `react-hooks/set-state-in-effect` lint 위배 → outer 가 settings fetch, inner 가 props 로 받아 useState 직접 초기화. `key={projectId}` 로 다른 project 전환 시 remount.
+- **비-OWNER 메뉴 숨김**: backend 가 403 으로 차단할 수 있지만 frontend 에서 메뉴 자체를 숨겨 UX 개선 (plan 의 "단순화" 보다 한 단계 더). `ProjectItem.tsx` 의 `{isOwner && ...}`.
+- **Vitest 미도입**: frontend 단위 테스트 셋업 본 phase 안 함. tsc/lint 만으로 회귀 확인. 향후 별도 phase.
+- **시각 검증**: subagent 환경에서 dev server 띄우기 어려움 → 사용자가 PR 머지 전 직접 (`bun run dev` + `uvicorn`).
+- **HandoffHistory + Reprocess 분리**: `useReprocessEvent` 훅 만들어둠. 호출 site 는 후속 (handoffs vs git-events 다른 list — 같은 모달에 합치면 복잡).
+- **TASK_SOURCE 상수 사용**: TaskCard 에서 string literal `'synced_from_plan'` 대신 `TASK_SOURCE.SYNCED_FROM_PLAN` 사용 (typo / 리팩토링 안전).
+
+---
+
 ## 2026-04-30 (Phase 5a)
 
 - [x] **Phase 5a 완료** — Backend endpoints + 자동 webhook 등록 (브랜치 `feature/phase-5a-backend-endpoints`)
