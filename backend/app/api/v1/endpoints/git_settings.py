@@ -3,18 +3,22 @@
 설계서: 2026-04-26-ai-task-automation-design.md §5.2, §9
 """
 
+import logging
 from uuid import UUID
 
+from cryptography.fernet import InvalidToken
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.crypto import encrypt_secret
+from app.core.crypto import decrypt_secret, encrypt_secret, generate_webhook_secret
 from app.database import get_db
 from app.dependencies import CurrentUser
-from app.schemas.git_settings import GitSettingsResponse, GitSettingsUpdate
-from app.services import project_service
+from app.schemas.git_settings import GitSettingsResponse, GitSettingsUpdate, WebhookRegisterResponse
+from app.services import github_hook_service, project_service
 from app.services.permission_service import can_manage, get_effective_role
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["git-settings"])
 
@@ -86,4 +90,75 @@ async def patch_git_settings(
         has_webhook_secret=project.webhook_secret_encrypted is not None,
         has_github_pat=project.github_pat_encrypted is not None,
         public_webhook_url=_public_webhook_url(),
+    )
+
+
+@router.post(
+    "/{project_id}/git-settings/webhook",
+    response_model=WebhookRegisterResponse,
+)
+async def register_webhook(
+    project_id: UUID,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """GitHub repo 에 push webhook 자동 등록 (또는 갱신).
+
+    - 같은 callback url 의 hook 이 있으면 PATCH (config.secret 갱신)
+    - 없으면 POST (신규 등록)
+    - 새 webhook_secret 항상 생성 — 기존 secret 무효화 (regenerate 의 부수 효과)
+    """
+    project = await project_service.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    role = await get_effective_role(db, user.id, project_id)
+    if role is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not can_manage(role):
+        raise HTTPException(status_code=403, detail="Owner only")
+
+    if not project.git_repo_url:
+        raise HTTPException(status_code=400, detail="git_repo_url 미설정")
+    if project.github_pat_encrypted is None:
+        raise HTTPException(status_code=400, detail="GitHub PAT 미설정")
+
+    try:
+        pat = decrypt_secret(project.github_pat_encrypted)
+    except InvalidToken:
+        logger.error("PAT 복호화 실패 — Fernet 마스터 키 mismatch project=%s", project_id)
+        raise HTTPException(status_code=500, detail="PAT 복호화 실패")
+
+    callback_url = _public_webhook_url()
+    new_secret = generate_webhook_secret()
+
+    existing_hooks = await github_hook_service.list_hooks(project.git_repo_url, pat)
+    matching = next(
+        (h for h in existing_hooks if h.get("config", {}).get("url") == callback_url),
+        None,
+    )
+
+    if matching is not None:
+        hook = await github_hook_service.update_hook(
+            project.git_repo_url, pat,
+            hook_id=matching["id"],
+            callback_url=callback_url,
+            secret=new_secret,
+        )
+        was_existing = True
+    else:
+        hook = await github_hook_service.create_hook(
+            project.git_repo_url, pat,
+            callback_url=callback_url,
+            secret=new_secret,
+        )
+        was_existing = False
+
+    project.webhook_secret_encrypted = encrypt_secret(new_secret)
+    await db.commit()
+
+    return WebhookRegisterResponse(
+        webhook_id=hook["id"],
+        was_existing=was_existing,
+        public_webhook_url=callback_url,
     )

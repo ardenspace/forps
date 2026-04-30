@@ -218,3 +218,121 @@ async def test_patch_git_settings_404_for_non_member(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 404
+
+
+async def test_post_webhook_creates_new_hook(
+    client_with_db, async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+):
+    user, proj = await _seed_user_project(async_session)
+    proj.git_repo_url = "https://github.com/ardenspace/app-chak"
+    proj.github_pat_encrypted = encrypt_secret("ghp_test_token")
+    await async_session.commit()
+
+    import app.services.github_hook_service as hook_mod
+
+    captured: dict[str, object] = {}
+
+    async def fake_list_hooks(repo_url, pat):
+        return []
+
+    async def fake_create_hook(repo_url, pat, *, callback_url, secret):
+        captured["pat"] = pat
+        captured["callback_url"] = callback_url
+        captured["secret"] = secret
+        return {"id": 77777, "config": {"url": callback_url}}
+
+    monkeypatch.setattr(hook_mod, "list_hooks", fake_list_hooks)
+    monkeypatch.setattr(hook_mod, "create_hook", fake_create_hook)
+
+    token = _auth_token(user)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-settings/webhook",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["webhook_id"] == 77777
+    assert body["was_existing"] is False
+    assert body["public_webhook_url"].endswith("/api/v1/webhooks/github")
+
+    assert captured["pat"] == "ghp_test_token"
+    assert captured["callback_url"].endswith("/api/v1/webhooks/github")
+
+    await async_session.refresh(proj)
+    assert proj.webhook_secret_encrypted is not None
+    from app.core.crypto import decrypt_secret
+    decrypted = decrypt_secret(proj.webhook_secret_encrypted)
+    assert decrypted == captured["secret"]
+
+
+async def test_post_webhook_updates_existing_hook(
+    client_with_db, async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+):
+    user, proj = await _seed_user_project(async_session)
+    proj.git_repo_url = "https://github.com/ardenspace/app-chak"
+    proj.github_pat_encrypted = encrypt_secret("ghp_test_token")
+    await async_session.commit()
+
+    import app.services.github_hook_service as hook_mod
+
+    callback_called: dict[str, bool] = {"create": False, "update": False}
+
+    async def fake_list_hooks(repo_url, pat):
+        return [
+            {
+                "id": 12345678,
+                "config": {"url": "http://localhost:8000/api/v1/webhooks/github"},
+            }
+        ]
+
+    async def fake_create_hook(*args, **kwargs):
+        callback_called["create"] = True
+        return {"id": -1}
+
+    async def fake_update_hook(repo_url, pat, *, hook_id, callback_url, secret):
+        callback_called["update"] = True
+        return {"id": hook_id, "config": {"url": callback_url}}
+
+    monkeypatch.setattr(hook_mod, "list_hooks", fake_list_hooks)
+    monkeypatch.setattr(hook_mod, "create_hook", fake_create_hook)
+    monkeypatch.setattr(hook_mod, "update_hook", fake_update_hook)
+
+    token = _auth_token(user)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-settings/webhook",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["webhook_id"] == 12345678
+    assert body["was_existing"] is True
+    assert callback_called["update"] is True
+    assert callback_called["create"] is False
+
+
+async def test_post_webhook_400_when_repo_or_pat_missing(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session)
+    token = _auth_token(user)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-settings/webhook",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 400
+
+
+async def test_post_webhook_403_for_non_owner(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session, role=WorkspaceRole.EDITOR)
+    proj.git_repo_url = "https://github.com/ardenspace/app-chak"
+    proj.github_pat_encrypted = encrypt_secret("ghp_test_token")
+    await async_session.commit()
+
+    token = _auth_token(user)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-settings/webhook",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 403
