@@ -17,7 +17,7 @@ _GITHUB_API = "https://api.github.com"
 _REPO_RE = re.compile(r"^https?://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/?#]+?)(?:\.git)?/?$")
 
 
-def _parse_repo(repo_url: str) -> tuple[str, str]:
+def parse_repo(repo_url: str) -> tuple[str, str]:
     """`https://github.com/owner/repo[.git][/]` → (owner, repo). 대소문자 보존."""
     m = _REPO_RE.match(repo_url.strip())
     if not m:
@@ -25,14 +25,14 @@ def _parse_repo(repo_url: str) -> tuple[str, str]:
     return m.group("owner"), m.group("repo")
 
 
-def _auth_headers(pat: str | None) -> dict[str, str]:
+def auth_headers(pat: str | None) -> dict[str, str]:
     headers = {"Accept": "application/vnd.github.v3+json"}
     if pat:
         headers["Authorization"] = f"token {pat}"
     return headers
 
 
-def _raise_for_status(res: httpx.Response, request: httpx.Request) -> None:
+def raise_for_status(res: httpx.Response, request: httpx.Request) -> None:
     """raise_for_status() 대체 — mock 환경에서도 안전하게 HTTPStatusError를 발생시킨다.
 
     Phase 5a code review I-1: Authorization 헤더는 raised exception 에 포함되지 않게 sanitize.
@@ -60,14 +60,14 @@ async def fetch_file(
     timeout: float = 30.0,
 ) -> str | None:
     """GitHub Contents API → 파일 raw text. 404 → None. 5xx → HTTPStatusError raise."""
-    owner, repo = _parse_repo(repo_url)
+    owner, repo = parse_repo(repo_url)
     url = f"{_GITHUB_API}/repos/{owner}/{repo}/contents/{path}?ref={sha}"
-    request = httpx.Request("GET", url, headers=_auth_headers(pat))
+    request = httpx.Request("GET", url, headers=auth_headers(pat))
     async with httpx.AsyncClient(timeout=timeout) as client:
         res = await client.send(request)
     if res.status_code == 404:
         return None
-    _raise_for_status(res, request)
+    raise_for_status(res, request)
     data = res.json()
     if data.get("encoding") == "base64":
         return base64.b64decode(data["content"]).decode("utf-8")
@@ -83,11 +83,11 @@ async def fetch_compare_files(
     timeout: float = 30.0,
 ) -> list[str]:
     """GitHub Compare API → `files[*].filename` 리스트. 404 / 5xx → HTTPStatusError raise."""
-    owner, repo = _parse_repo(repo_url)
+    owner, repo = parse_repo(repo_url)
     url = f"{_GITHUB_API}/repos/{owner}/{repo}/compare/{base_sha}...{head_sha}"
-    request = httpx.Request("GET", url, headers=_auth_headers(pat))
+    request = httpx.Request("GET", url, headers=auth_headers(pat))
     async with httpx.AsyncClient(timeout=timeout) as client:
         res = await client.send(request)
-    _raise_for_status(res, request)
+    raise_for_status(res, request)
     data = res.json()
     return [f["filename"] for f in data.get("files", [])]

@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 
-from app.services.git_repo_service import _auth_headers, _parse_repo, _raise_for_status
+from app.services.git_repo_service import auth_headers, parse_repo, raise_for_status
 
 
 _GITHUB_API = "https://api.github.com"
@@ -27,12 +27,12 @@ async def list_hooks(
     timeout: float = 30.0,
 ) -> list[dict[str, Any]]:
     """GET /repos/{owner}/{repo}/hooks → hooks 배열."""
-    owner, repo = _parse_repo(repo_url)
+    owner, repo = parse_repo(repo_url)
     url = f"{_GITHUB_API}/repos/{owner}/{repo}/hooks"
-    request = httpx.Request("GET", url, headers=_auth_headers(pat))
+    request = httpx.Request("GET", url, headers=auth_headers(pat))
     async with httpx.AsyncClient(timeout=timeout) as client:
         res = await client.send(request)
-    _raise_for_status(res, request)
+    raise_for_status(res, request)
     return res.json()
 
 
@@ -45,7 +45,7 @@ async def create_hook(
     timeout: float = 30.0,
 ) -> dict[str, Any]:
     """POST /repos/{owner}/{repo}/hooks — push 이벤트 webhook 생성."""
-    owner, repo = _parse_repo(repo_url)
+    owner, repo = parse_repo(repo_url)
     url = f"{_GITHUB_API}/repos/{owner}/{repo}/hooks"
     body = {
         "name": "web",
@@ -58,10 +58,10 @@ async def create_hook(
             "insecure_ssl": "0",
         },
     }
-    request = httpx.Request("POST", url, headers=_auth_headers(pat), json=body)
+    request = httpx.Request("POST", url, headers=auth_headers(pat), json=body)
     async with httpx.AsyncClient(timeout=timeout) as client:
         res = await client.send(request)
-    _raise_for_status(res, request)
+    raise_for_status(res, request)
     return res.json()
 
 
@@ -75,7 +75,7 @@ async def update_hook(
     timeout: float = 30.0,
 ) -> dict[str, Any]:
     """PATCH /repos/{owner}/{repo}/hooks/{hook_id} — config.secret 갱신."""
-    owner, repo = _parse_repo(repo_url)
+    owner, repo = parse_repo(repo_url)
     url = f"{_GITHUB_API}/repos/{owner}/{repo}/hooks/{hook_id}"
     body = {
         "active": True,
@@ -87,8 +87,8 @@ async def update_hook(
             "insecure_ssl": "0",
         },
     }
-    request = httpx.Request("PATCH", url, headers=_auth_headers(pat), json=body)
+    request = httpx.Request("PATCH", url, headers=auth_headers(pat), json=body)
     async with httpx.AsyncClient(timeout=timeout) as client:
         res = await client.send(request)
-    _raise_for_status(res, request)
+    raise_for_status(res, request)
     return res.json()
