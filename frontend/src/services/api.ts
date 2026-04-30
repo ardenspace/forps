@@ -16,6 +16,11 @@ import type {
   UpdateProjectMemberRequest,
   ShareLink,
   ShareLinkCreateRequest,
+  GitSettings,
+  GitSettingsUpdate,
+  WebhookRegisterResponse,
+  HandoffSummary,
+  ReprocessResponse,
 } from '@/types';
 
 const apiClient = axios.create({
@@ -99,6 +104,19 @@ export const api = {
   discord: {
     sendSummary: (projectId: string) =>
       apiClient.post<{ message: string }>(`/projects/${projectId}/discord-summary`),
+  },
+
+  git: {
+    getSettings: (projectId: string) =>
+      apiClient.get<GitSettings>(`/projects/${projectId}/git-settings`),
+    updateSettings: (projectId: string, data: GitSettingsUpdate) =>
+      apiClient.patch<GitSettings>(`/projects/${projectId}/git-settings`, data),
+    registerWebhook: (projectId: string) =>
+      apiClient.post<WebhookRegisterResponse>(`/projects/${projectId}/git-settings/webhook`),
+    listHandoffs: (projectId: string, params?: { branch?: string; limit?: number }) =>
+      apiClient.get<HandoffSummary[]>(`/projects/${projectId}/handoffs`, { params }),
+    reprocessEvent: (projectId: string, eventId: string) =>
+      apiClient.post<ReprocessResponse>(`/projects/${projectId}/git-events/${eventId}/reprocess`),
   },
 
   tasks: {
