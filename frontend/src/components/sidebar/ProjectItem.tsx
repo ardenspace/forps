@@ -69,7 +69,7 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
           </button>
 
           {isMenuOpen && (
-            <div className="absolute right-0 top-full mt-1 z-50 min-w-[100px] border-2 border-black bg-white shadow-[2px_2px_0px_0px_rgba(244,0,4,1)]">
+            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] border-2 border-black bg-white shadow-[2px_2px_0px_0px_rgba(244,0,4,1)]">
               <button
                 type="button"
                 className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-yellow-50 transition-colors"

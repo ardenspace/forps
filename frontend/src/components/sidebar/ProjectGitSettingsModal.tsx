@@ -62,7 +62,9 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
     }
   };
 
-  const webhookDisabled = !settings.git_repo_url || !settings.has_github_pat;
+  // I-1 fix: live `repoUrl` state 사용 — 사용자가 URL 입력 즉시 webhook 버튼 enable.
+  // has_github_pat 은 settings 그대로 (PAT 는 write-only — 입력 후 저장해야 백엔드 반영).
+  const webhookDisabled = !repoUrl || !settings.has_github_pat;
 
   return (
     <div className="space-y-4">
@@ -215,7 +217,7 @@ export function ProjectGitSettingsModal({
             </div>
           </div>
         ) : (
-          // settings 로드 완료 후 key={settings.git_repo_url} 로 폼 재마운트 방지
+          // key={projectId} — 같은 project 면 폼 state 유지, 다른 project 로 전환 시 remount
           <GitSettingsForm
             key={projectId}
             projectId={projectId}

@@ -1,5 +1,5 @@
 import { useDraggable } from '@dnd-kit/core';
-import type { Task } from '@/types/task';
+import { TASK_SOURCE, type Task } from '@/types/task';
 
 interface TaskCardProps {
   task: Task;
@@ -26,7 +26,7 @@ export function TaskCard({ task, onClick, isDragDisabled = false }: TaskCardProp
     >
       <h4 className="font-bold text-xs sm:text-sm break-words">
         {task.title}
-        {task.source === 'synced_from_plan' && (
+        {task.source === TASK_SOURCE.SYNCED_FROM_PLAN && (
           <span
             className="ml-1 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700"
             title="PLAN.md 에서 자동 동기화된 태스크"
