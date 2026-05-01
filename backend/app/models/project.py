@@ -28,10 +28,15 @@ class Project(Base):
     # Phase 4 — task-automation 설계서 §9 (GitHub PAT Fernet 암호화 저장)
     github_pat_encrypted: Mapped[bytes | None] = mapped_column(default=None)
 
+    # Phase 6 — Discord 알림 cooldown / auto-disable
+    discord_consecutive_failures: Mapped[int] = mapped_column(default=0, nullable=False)
+    discord_disabled_at: Mapped[datetime | None] = mapped_column(default=None)
+
     def __init__(self, **kwargs: object) -> None:
         kwargs.setdefault("git_default_branch", "main")
         kwargs.setdefault("plan_path", "PLAN.md")
         kwargs.setdefault("handoff_dir", "handoffs/")
+        kwargs.setdefault("discord_consecutive_failures", 0)
         super().__init__(**kwargs)
 
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
