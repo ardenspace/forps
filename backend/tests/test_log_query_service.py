@@ -4,7 +4,7 @@
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -262,19 +262,19 @@ async def test_list_logs_filter_by_level(async_session: AsyncSession):
 async def test_list_logs_filter_by_since(async_session: AsyncSession):
     """since 필터 (received_at >= since).
 
-    Note: log_events 는 received_at 기준 daily range partition —
-    테스트 DB 는 오늘(2026-05-01) ~ +30일치만 partition 존재.
-    과거 날짜는 partition miss 로 IntegrityError 발생 → 동일 날짜(5/1) 내 시각 차이로 구분.
+    날짜 hardcode 회피 — log_events 는 daily range partition (today+30일).
+    utcnow 기준 상대값 사용으로 미래 날짜에서도 안정적.
     """
     proj = await _seed_project(async_session)
-    cutoff = datetime(2026, 5, 1, 10, 0)
+    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    cutoff = now + timedelta(hours=1)
     old_e = _make_log_event(
         proj, fingerprint="fp-old",
-        received_at=datetime(2026, 5, 1, 8, 0),   # 오늘 08:00 — cutoff 이전
+        received_at=now,  # cutoff 보다 1시간 전
     )
     new_e = _make_log_event(
         proj, fingerprint="fp-new",
-        received_at=datetime(2026, 5, 1, 11, 0),  # 오늘 11:00 — cutoff 이후
+        received_at=cutoff + timedelta(hours=1),  # cutoff 보다 1시간 후
     )
     async_session.add_all([old_e, new_e])
     await async_session.commit()

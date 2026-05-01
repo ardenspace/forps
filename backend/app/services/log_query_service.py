@@ -50,6 +50,7 @@ async def list_groups(
 
 
 _RECENT_EVENTS_LIMIT = 50
+_WARNING_OR_HIGHER = (LogLevel.WARNING, LogLevel.ERROR, LogLevel.CRITICAL)
 
 
 async def _find_previous_good_sha(
@@ -216,11 +217,9 @@ async def list_logs(
         LogEvent.project_id == project_id
     )
 
-    if q:
+    if q is not None and q.strip():
         # pg_trgm 인덱스 활용 — level >= WARNING 자동 강제
-        warning_or_higher = LogEvent.level.in_(
-            [LogLevel.WARNING, LogLevel.ERROR, LogLevel.CRITICAL]
-        )
+        warning_or_higher = LogEvent.level.in_(_WARNING_OR_HIGHER)
         base = base.where(warning_or_higher).where(LogEvent.message.ilike(f"%{q}%"))
         count_base = count_base.where(warning_or_higher).where(
             LogEvent.message.ilike(f"%{q}%")
