@@ -4,7 +4,7 @@
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -108,3 +108,134 @@ async def test_list_groups_pagination_total_correct(async_session: AsyncSession)
     )
     assert total2 == 5
     assert len(rows2) == 1  # 5 - 4 = 1
+
+
+# ---- get_group_detail ----
+
+from app.models.git_push_event import GitPushEvent
+from app.models.handoff import Handoff
+from app.models.task import Task, TaskSource, TaskStatus
+
+
+def _make_log_event(
+    proj: Project, *, fingerprint: str = "fp-1", version_sha: str = "a" * 40,
+    environment: str = "production", received_at: datetime | None = None,
+) -> LogEvent:
+    return LogEvent(
+        project_id=proj.id, level=LogLevel.ERROR,
+        message="boom", logger_name="app.x", version_sha=version_sha,
+        environment=environment, hostname="h",
+        emitted_at=datetime.utcnow(), received_at=received_at or datetime.utcnow(),
+        exception_class="KeyError", exception_message="x",
+        fingerprint=fingerprint, fingerprinted_at=datetime.utcnow(),
+    )
+
+
+async def test_get_group_detail_normal_path_with_git_context(async_session: AsyncSession):
+    """정상 path — group + recent events + git context (handoff/task/push_event) 채워짐."""
+    proj = await _seed_project(async_session)
+    sha = "a" * 40
+    group = _make_group(proj, fingerprint="fp-1")
+    event = _make_log_event(proj, fingerprint="fp-1", version_sha=sha)
+    handoff = Handoff(
+        project_id=proj.id, branch="main",
+        author_git_login="alice", commit_sha=sha,
+        pushed_at=datetime.utcnow(), parsed_tasks=[], free_notes={},
+        raw_content="x",
+    )
+    task = Task(
+        project_id=proj.id, title="T",
+        source=TaskSource.SYNCED_FROM_PLAN, external_id="task-001",
+        status=TaskStatus.DONE, last_commit_sha=sha,
+    )
+    push = GitPushEvent(
+        project_id=proj.id, branch="main", head_commit_sha=sha,
+        commits=[], commits_truncated=False, pusher="alice",
+        received_at=datetime.utcnow(), processed_at=datetime.utcnow(),
+    )
+    async_session.add_all([group, event, handoff, task, push])
+    await async_session.commit()
+    await async_session.refresh(group)
+
+    detail = await log_query_service.get_group_detail(
+        async_session, project_id=proj.id, group_id=group.id,
+    )
+    assert detail is not None
+    assert detail["group"].id == group.id
+    assert len(detail["recent_events"]) == 1
+    git_ctx = detail["git_context"]
+    assert len(git_ctx["first_seen"]["handoffs"]) == 1
+    assert len(git_ctx["first_seen"]["tasks"]) == 1
+    assert git_ctx["first_seen"]["git_push_event"] is not None
+    assert git_ctx["previous_good_sha"] is None  # 다른 fingerprint 의 SHA 없음
+
+
+async def test_get_group_detail_unknown_sha_only(async_session: AsyncSession):
+    """모든 events 의 version_sha == 'unknown' → git context 빈."""
+    proj = await _seed_project(async_session)
+    group = _make_group(proj, fingerprint="fp-2")
+    event = _make_log_event(proj, fingerprint="fp-2", version_sha="unknown")
+    async_session.add_all([group, event])
+    await async_session.commit()
+    await async_session.refresh(group)
+
+    detail = await log_query_service.get_group_detail(
+        async_session, project_id=proj.id, group_id=group.id,
+    )
+    assert detail is not None
+    git_ctx = detail["git_context"]
+    assert git_ctx["first_seen"]["handoffs"] == []
+    assert git_ctx["first_seen"]["tasks"] == []
+    assert git_ctx["first_seen"]["git_push_event"] is None
+
+
+async def test_get_group_detail_previous_good_sha_algorithm(async_session: AsyncSession):
+    """직전 정상 SHA — 같은 environment 의 다른 fingerprint SHA 가 가장 최근 정상."""
+    proj = await _seed_project(async_session)
+    target_fp = "fp-target"
+    other_fp = "fp-other"
+
+    # Old: 다른 fingerprint 의 event (정상 SHA — target_fp 발생 안 함)
+    # NB: version_sha CHECK = '^[0-9a-f]{40}$' OR 'unknown' — hex 문자만.
+    good_sha = "b" * 40
+    target_sha = "c" * 40
+    good_event = _make_log_event(
+        proj, fingerprint=other_fp, version_sha=good_sha,
+        environment="production",
+        received_at=datetime(2026, 5, 1, 9, 0),  # before target
+    )
+
+    # New: target_fp 의 첫 발생
+    target_event = _make_log_event(
+        proj, fingerprint=target_fp, version_sha=target_sha,
+        environment="production",
+        received_at=datetime(2026, 5, 1, 10, 0),
+    )
+
+    group = _make_group(proj, fingerprint=target_fp)
+    group.first_seen_at = datetime(2026, 5, 1, 10, 0)
+
+    async_session.add_all([good_event, target_event, group])
+    await async_session.commit()
+    await async_session.refresh(group)
+
+    detail = await log_query_service.get_group_detail(
+        async_session, project_id=proj.id, group_id=group.id,
+    )
+    assert detail is not None
+    assert detail["git_context"]["previous_good_sha"] == good_sha
+
+
+async def test_get_group_detail_returns_none_for_other_project(async_session: AsyncSession):
+    """다른 project 의 group_id → None."""
+    proj_a = await _seed_project(async_session)
+    proj_b = await _seed_project(async_session)
+    group = _make_group(proj_b, fingerprint="fp-x")
+    async_session.add(group)
+    await async_session.commit()
+    await async_session.refresh(group)
+
+    detail = await log_query_service.get_group_detail(
+        async_session, project_id=proj_a.id, group_id=group.id,
+    )
+    assert detail is None
