@@ -7,11 +7,13 @@ import gzip
 import json
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
+from app.models.log_event import LogEvent, LogLevel
 from app.services import log_ingest_service
 
 logger = logging.getLogger(__name__)
@@ -19,9 +21,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["log-ingest"])
 
 
+async def _process_log_event_in_new_session(event_id) -> None:
+    """BackgroundTask — 자체 session, fingerprint_processor 호출, 멱등."""
+    from app.services import fingerprint_processor
+
+    try:
+        async with AsyncSessionLocal() as db:
+            event = await db.get(LogEvent, event_id)
+            if event is None or event.fingerprinted_at is not None:
+                return
+            await fingerprint_processor.process(db, event)
+    except Exception:
+        logger.exception("background fingerprint processing failed for event %s", event_id)
+
+
 @router.post("/log-ingest")
 async def ingest_logs(
     request: Request,
+    background_tasks: BackgroundTasks,
     authorization: str | None = Header(default=None),
     content_encoding: str | None = Header(default=None),
     x_forps_dropped_since_last: int | None = Header(default=None, alias="X-Forps-Dropped-Since-Last"),
@@ -58,7 +75,7 @@ async def ingest_logs(
 
     # ingest_batch 가 rate limit + validate + insert + commit 처리
     try:
-        accepted, rejected = await log_ingest_service.ingest_batch(
+        accepted, rejected, accepted_ids = await log_ingest_service.ingest_batch(
             db, token=token,
             payload_dict=payload,
             dropped_since_last=x_forps_dropped_since_last,
@@ -69,6 +86,17 @@ async def ingest_logs(
     except Exception:
         logger.exception("log-ingest unexpected error")
         raise HTTPException(status_code=500, detail="Internal error")
+
+    # Phase 3 — ERROR↑ event 만 BackgroundTask 큐 (fingerprint 처리 trigger)
+    if accepted_ids:
+        error_stmt = (
+            select(LogEvent.id)
+            .where(LogEvent.id.in_(accepted_ids))
+            .where(LogEvent.level.in_([LogLevel.ERROR, LogLevel.CRITICAL]))
+        )
+        error_ids = (await db.execute(error_stmt)).scalars().all()
+        for eid in error_ids:
+            background_tasks.add_task(_process_log_event_in_new_session, eid)
 
     # 모두 invalid → 400
     if accepted == 0 and rejected:
