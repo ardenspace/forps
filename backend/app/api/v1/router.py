@@ -12,6 +12,7 @@ from app.api.v1.endpoints.log_tokens import router as log_tokens_router
 from app.api.v1.endpoints.log_ingest import router as log_ingest_router
 from app.api.v1.endpoints.log_errors import router as log_errors_router
 from app.api.v1.endpoints.log_logs import router as log_logs_router
+from app.api.v1.endpoints.log_health import router as log_health_router
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(auth_router)
@@ -26,3 +27,4 @@ api_v1_router.include_router(log_tokens_router)
 api_v1_router.include_router(log_ingest_router)
 api_v1_router.include_router(log_errors_router)
 api_v1_router.include_router(log_logs_router)
+api_v1_router.include_router(log_health_router)
