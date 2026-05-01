@@ -1,5 +1,61 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-05-01 (Error-log Phase 4 — Query API + Git Context Join)
+
+- [x] **Error-log Phase 4** — 브랜치 `feature/error-log-phase4-query`
+  - [x] **`log_query_service`** (5 함수): `list_groups` (status/since 필터, offset/limit + total) / `get_group_detail` (group + recent 50 events + nested git_context + previous_good_sha) / `list_logs` (level/since/q + pg_trgm) / `_find_previous_good_sha` (LEFT JOIN + IS NULL 단일 SQL self-join) / `_collect_git_context` (3 단일 SQL — handoffs/tasks(archived 포함)/push_events first by received_at asc).
+  - [x] **`GET /api/v1/projects/{id}/errors`**: ErrorGroup 목록 + 필터 (status / since) + offset/limit. 멤버 권한 (VIEWER 포함, 운영 투명성).
+  - [x] **`GET /api/v1/projects/{id}/errors/{group_id}`**: 상세 + recent 50 events + git 컨텍스트 (nested first_seen + previous_good_sha). 다른 project group → 404. nested dict → Pydantic schema 명시 변환 (handoffs/tasks 각 model_validate, push_event None ternary).
+  - [x] **`GET /api/v1/projects/{id}/logs`**: LogEvent raw + level/since/q. q 지정 시 자동 level >= WARNING 강제 (Phase 1 의 `idx_log_message_trgm` partial 활용). q + level 동시 시 q 우선 (단순화). q `min_length=2` Pydantic 검증.
+  - [x] **archived task 포함** (spec §4.2): UI 가 후속 (archived) 배지 표시.
+  - [x] **마이그레이션 신규 없음** — Phase 1 alembic 의 모든 모델 + 인덱스 (`idx_log_message_trgm` partial gin) 활용.
+  - [x] **deviation 1 (Task 3 main `a2937f2`)**: `_find_previous_good_sha` 의 `.distinct()` 제거 — PostgreSQL `SELECT DISTINCT col1 ... ORDER BY col2` 비-select 컬럼 거부 → InvalidColumnReferenceError. `LIMIT 1` 으로 functional equivalence (1 row → 1 SHA).
+  - [x] **deviation 2 (Task 3)**: 테스트 SHA `g`*40 / `t`*40 → `b`*40 / `c`*40 — `log_events_version_sha_check` constraint (`^[0-9a-f]{40}$|^unknown$`) 가 hex 만 허용. plan 의 SHA 가 invalid 였음.
+  - [x] **deviation 3 (Task 4)**: `test_list_logs_filter_by_since` 의 hardcoded `2026-04-30` → `datetime.utcnow()` 상대값. 이유: `log_events` 가 daily range partition + alembic 가 today+30일만 생성 → 2026-04-30 partition 없음 → `CheckViolationError`. **time bomb 회피**: 미래 날짜에서도 안정적.
+  - [x] **polish 적용** (`0f8419d` Task 3, `5f7015b` Task 4): `_collect_git_context` 의 push_events Python sort → SQL ORDER BY ASC LIMIT 1 ("3 단일 SQL" 일관성) / 중간 imports → 상단 (PEP 8) / `_WARNING_OR_HIGHER` 모듈 상수 (Phase 1 partial index 와 동일 set, searchable 계약) / `if q:` → `if q is not None and q.strip():` (서비스 단독 안전성) / row-level vs SHA-aggregate semantic 코멘트 / environment 가정 한계 코멘트.
+  - [x] **검증**: backend **275 tests pass** (256 baseline + 19 신규: 11 service + 5 errors endpoint + 3 logs endpoint).
+
+### 마지막 커밋
+
+- forps: `<sha> docs(handoff+plan): Error-log Phase 4 완료 + Phase 5/6 다음 할 일`
+- 브랜치 base: `0f1cb10` (main, Error-log Phase 3 PR #17 머지 직후)
+
+### 다음 (Phase 5 — UI)
+
+- LogsPage / ErrorsPage / ErrorDetailPage / GitContextPanel / LogTokensPage / LogHealthBadge
+- PATCH /errors/{group_id} (사용자 status 전이 — resolve/ignore/reopen) + 권한 OWNER
+- GET /log-tokens 목록 endpoint (UI 가 호출)
+- GET /log-health (unknown SHA 비율 모니터링)
+
+또는 Phase 6 (알림 본편 — spike/regression) — 사용자 dogfooding 후 결정.
+
+### Phase 5 시작 전 권장 follow-up (codebase-wide DRY)
+
+- **`require_project_member` Depends 헬퍼**: 권한 체크 5줄 패턴이 8+ endpoint 반복 (Phase 4 + git_settings.py 등). FastAPI Depends 로 통합. CLAUDE.md DRY 규칙. Phase 4 reviewer 가 raise.
+- **conftest.py 통합**: `client_with_db` / `_seed_user_project` / `_auth_token` 가 6+ test 파일 동일 정의. 공통 conftest 로 이동. Phase 4 reviewer 가 raise.
+- **`datetime.utcnow()` deprecation**: codebase-wide 패턴 — Python 3.13+ 또는 `-W error` 시 fail. `datetime.now(timezone.utc).replace(tzinfo=None)` 으로 sweep PR.
+
+이 3건 Phase 5 시작 전 별도 refactor PR 권장 (각 endpoint 독립 변경).
+
+### 블로커
+
+없음
+
+### 메모 (2026-05-01 Error-log Phase 4 추가)
+
+- **직전 정상 SHA = LEFT JOIN + IS NULL 패턴**: 단일 SQL 로 같은 environment 의 target_fp 가 발생 안 했던 가장 최근 SHA 찾음. SQLAlchemy `LogEvent.__table__.alias()` 로 self-join. 2-step Python filter 대비 효율 ↑. **DISTINCT 불가** — ORDER BY col 이 SELECT col 과 다르면 PG 거부, `LIMIT 1` 으로 functional equivalence.
+- **Git 컨텍스트 3 단일 SQL**: `IN (version_shas)` 로 handoffs/tasks/push_events bulk fetch. push_events 는 SQL `ORDER BY received_at asc LIMIT 1` (Python sort 회피 — Task 3 review polish). nested 응답 1 endpoint round-trip. archived task 포함 (spec §4.2 — UI 가 후속 (archived) 배지).
+- **pg_trgm partial index 활용**: `idx_log_message_trgm WHERE level >= WARNING` (Phase 1 alembic). q 지정 시 자동 WARNING+ 강제 — 인덱스 partial WHERE 매칭. q + level 동시 시 q 우선 (단순화). `_WARNING_OR_HIGHER = (WARNING, ERROR, CRITICAL)` 상수로 인덱스 계약 searchable.
+- **environment 필터 v1 미포함**: ErrorGroup 자체엔 environment 컬럼 없음 (같은 fingerprint 가 여러 env 발생 가능). 후속 호소 시 EXISTS subquery 또는 컬럼 추가.
+- **VIEWER 권한 조회 가능**: 운영 투명성 — 에러 정보는 일반 사용자에게도 노출 가치 있음. PATCH (Phase 5) 만 OWNER.
+- **previous_good_sha 의 environment**: first_event 의 environment (recent 50 중 oldest). 한 fingerprint 가 여러 environment 발생 시 부정확 가능 — recent 50 안에 진짜 first event 누락되면 잘못된 env 사용. 후속: ErrorGroup 에 first_environment 컬럼 추가 검토 (코멘트로 기록).
+- **`__table__.alias()` 패턴**: SQLAlchemy 2.0 의 self-join 표준 패턴. ORM model 이 아닌 table 객체를 alias 해서 사용. raw SQL 안 쓰고도 LEFT JOIN + IS NULL 가능.
+- **partition 시한폭탄 학습** (Task 4 deviation): `log_events` 는 daily range partition + 동적 alembic 가 today+30일만 생성. 테스트 hardcoded 미래/과거 날짜는 시간이 지나면 `CheckViolationError`. **`datetime.utcnow()` 상대값 + `timedelta` 사용 권장**.
+- **DISTINCT + ORDER BY 비-select 컬럼 PG 제약 학습**: `SELECT DISTINCT col1 ... ORDER BY col2` 거부 (`InvalidColumnReferenceError`). `LIMIT 1` 으로 단일 row 보장이면 DISTINCT 불필요.
+- **next 가능 옵션**: Phase 5 (UI 통합 — 대규모 frontend phase) 또는 Phase 6 (알림 본편). dogfooding 으로 사용자 우선순위 평가.
+
+---
+
 ## 2026-05-01 (Error-log Phase 3 — Fingerprint + ErrorGroup + Reaper + B-lite Alert)
 
 - [x] **Error-log Phase 3** — 브랜치 `feature/error-log-phase3-fingerprint`
