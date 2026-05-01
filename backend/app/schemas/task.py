@@ -54,6 +54,8 @@ class TaskResponse(BaseModel):
     external_id: str | None = None
     last_commit_sha: str | None = None
     archived_at: datetime | None = None
+    # Phase 5 follow-up B2 — handoff missing 배지 (TaskCard ⚠️)
+    handoff_missing: bool = False
 
     model_config = {"from_attributes": True}
 
