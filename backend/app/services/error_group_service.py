@@ -127,6 +127,8 @@ async def transition_status(
 
     Raises:
         ValueError: 불법 전이 ((현재, action) tuple 이 _LEGAL_TRANSITIONS 에 없음).
+
+    Note: 호출자(endpoint)가 commit 책임 — `upsert` 와 같은 패턴.
     """
     key = (group.status, action)
     next_status = _LEGAL_TRANSITIONS.get(key)
@@ -147,6 +149,5 @@ async def transition_status(
         group.resolved_by_user_id = None
         group.resolved_in_version_sha = None
 
-    await db.commit()
-    await db.refresh(group)
+    await db.flush()
     return group
