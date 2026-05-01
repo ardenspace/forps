@@ -4,9 +4,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import check_project_member, require_project_member
 from app.database import get_db
 from app.dependencies import CurrentUser
 from app.models.task import TaskStatus
+from app.models.workspace import WorkspaceRole
 from app.schemas.task import (
     TaskCreate,
     TaskUpdate,
@@ -14,7 +16,6 @@ from app.schemas.task import (
     TaskFilters,
 )
 from app.services import task_service
-from app.services.permission_service import get_effective_role, can_edit, can_manage
 
 router = APIRouter(tags=["tasks"])
 
@@ -29,12 +30,9 @@ async def list_project_tasks(
     assignee_id: UUID | None = None,
     mine_only: bool = False,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member()),
 ):
     """프로젝트의 태스크 목록 (Board용)"""
-    role = await get_effective_role(db, user.id, project_id)
-    if not role:
-        raise HTTPException(status_code=403, detail="Permission denied")
-
     filters = TaskFilters(status=status, assignee_id=assignee_id, mine_only=mine_only)
     return await task_service.get_project_tasks(db, project_id, user.id, filters)
 
@@ -45,12 +43,9 @@ async def create_task(
     data: TaskCreate,
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(min_role=WorkspaceRole.EDITOR)),
 ):
     """태스크 생성 (editor 이상)"""
-    role = await get_effective_role(db, user.id, project_id)
-    if not can_edit(role):
-        raise HTTPException(status_code=403, detail="Permission denied")
-
     return await task_service.create_task(db, project_id, user.id, data)
 
 
@@ -91,10 +86,7 @@ async def update_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    role = await get_effective_role(db, user.id, task.project_id)
-    if not can_edit(role):
-        raise HTTPException(status_code=403, detail="Permission denied")
-
+    await check_project_member(db, user.id, task.project_id, min_role=WorkspaceRole.EDITOR)
     return await task_service.update_task(db, task_id, user.id, data)
 
 
@@ -109,8 +101,11 @@ async def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    role = await get_effective_role(db, user.id, task.project_id)
-    if not can_manage(role):
-        raise HTTPException(status_code=403, detail="Only owner can delete tasks")
-
+    await check_project_member(
+        db,
+        user.id,
+        task.project_id,
+        min_role=WorkspaceRole.OWNER,
+        denied_detail="Only owner can delete tasks",
+    )
     await task_service.delete_task(db, task_id, user.id)

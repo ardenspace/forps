@@ -731,7 +731,7 @@ async def test_concurrent_register_webhook_serializes(
 
     async def runner(maker):
         async with maker() as db:
-            await register_webhook(project_id=project_id, user=user, db=db)
+            await register_webhook(project_id=project_id, db=db)
 
     async def releaser():
         # T1 이 list_hooks 까지 들어간 시점에 T2 도 entry FOR UPDATE 에서 대기 중이도록 시간 둠.

@@ -11,16 +11,15 @@ import bcrypt
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_project_member
 from app.database import get_db
-from app.dependencies import CurrentUser
 from app.models.log_ingest_token import LogIngestToken
+from app.models.workspace import WorkspaceRole
 from app.schemas.log_token import (
     LogTokenCreate,
     LogTokenResponse,
     LogTokenRevokedResponse,
 )
-from app.services import project_service
-from app.services.permission_service import can_manage, get_effective_role
 
 
 router = APIRouter(prefix="/projects", tags=["log-tokens"])
@@ -34,19 +33,14 @@ router = APIRouter(prefix="/projects", tags=["log-tokens"])
 async def create_log_token(
     project_id: UUID,
     data: LogTokenCreate,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        hide_existence=True,
+        denied_detail="Owner only",
+    )),
 ):
     """토큰 발급 — 응답에 평문 token 1회만, DB 에는 bcrypt(secret) 만."""
-    project = await project_service.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    if not can_manage(role):
-        raise HTTPException(status_code=403, detail="Owner only")
-
     # 256-bit secret + bcrypt cost 12
     secret = secrets.token_urlsafe(32)
     secret_hash = bcrypt.hashpw(
@@ -79,19 +73,14 @@ async def create_log_token(
 async def revoke_log_token(
     project_id: UUID,
     token_id: UUID,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        hide_existence=True,
+        denied_detail="Owner only",
+    )),
 ):
     """토큰 폐기 — soft delete (revoked_at = now)."""
-    project = await project_service.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    if not can_manage(role):
-        raise HTTPException(status_code=403, detail="Owner only")
-
     token = await db.get(LogIngestToken, token_id)
     if token is None or token.project_id != project_id:
         raise HTTPException(status_code=404, detail="Token not found")
