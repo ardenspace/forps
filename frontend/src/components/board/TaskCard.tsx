@@ -34,6 +34,14 @@ export function TaskCard({ task, onClick, isDragDisabled = false }: TaskCardProp
             PLAN
           </span>
         )}
+        {task.handoff_missing && (
+          <span
+            className="ml-1 rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-800"
+            title="이 commit 의 handoff 기록이 없습니다 — 작업 기록 빠짐"
+          >
+            ⚠️ 기록 빠짐
+          </span>
+        )}
       </h4>
       {task.assignee && (
         <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 break-words">{task.assignee.name}</p>

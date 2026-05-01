@@ -3,7 +3,9 @@ import { useDeleteProject } from '@/hooks/useProjects';
 import { EditProjectModal } from '@/components/sidebar/EditProjectModal';
 import { ProjectGitSettingsModal } from '@/components/sidebar/ProjectGitSettingsModal';
 import { HandoffHistoryModal } from '@/components/sidebar/HandoffHistoryModal';
+import { GitEventListModal } from '@/components/sidebar/GitEventListModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useFailedGitEvents } from '@/hooks/useGithubSettings';
 import type { Project } from '@/types/project';
 
 interface ProjectItemProps {
@@ -19,10 +21,15 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isGitSettingsOpen, setGitSettingsOpen] = useState(false);
   const [isHandoffOpen, setHandoffOpen] = useState(false);
+  const [isGitEventOpen, setGitEventOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const deleteProject = useDeleteProject(workspaceId);
 
   const isOwner = project.my_role === 'owner';
+
+  // OWNER 만 fetch — 비-OWNER 는 메뉴 자체 미노출
+  const { data: failedEvents } = useFailedGitEvents(isOwner ? project.id : null);
+  const failedCount = failedEvents?.length ?? 0;
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -65,7 +72,15 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
               setMenuOpen((prev) => !prev);
             }}
           >
-            ···
+            <span className="relative">
+              ···
+              {failedCount > 0 && (
+                <span
+                  className="absolute -top-0.5 -right-1 w-1.5 h-1.5 bg-red-500 rounded-full"
+                  aria-label={`${failedCount}건 sync 실패`}
+                />
+              )}
+            </span>
           </button>
 
           {isMenuOpen && (
@@ -103,6 +118,19 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
               >
                 Handoff 이력
               </button>
+              {failedCount > 0 && (
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-yellow-50 transition-colors text-yellow-800"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    setGitEventOpen(true);
+                  }}
+                >
+                  ⚠️ Sync 실패 ({failedCount})
+                </button>
+              )}
               <button
                 type="button"
                 className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-yellow-50 transition-colors text-red-600"
@@ -138,6 +166,12 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
         projectId={project.id}
         open={isHandoffOpen}
         onClose={() => setHandoffOpen(false)}
+      />
+
+      <GitEventListModal
+        projectId={project.id}
+        open={isGitEventOpen}
+        onClose={() => setGitEventOpen(false)}
       />
 
       <ConfirmModal

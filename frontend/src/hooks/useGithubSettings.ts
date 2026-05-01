@@ -50,6 +50,21 @@ export function useReprocessEvent(projectId: string) {
       api.git.reprocessEvent(projectId, eventId).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'handoffs'] });
+      // B2: failed git-events 도 refetch (재처리 후 list 갱신)
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'git-events', 'failed'] });
     },
+  });
+}
+
+// B2 — failed git push events list (TaskCard ⚠️ 와는 별도, 모달 + ProjectItem badge 용)
+export function useFailedGitEvents(projectId: string | null) {
+  return useQuery({
+    queryKey: ['projects', projectId, 'git-events', 'failed'],
+    queryFn: () =>
+      api.git
+        .listGitEvents(projectId!, { failed_only: true, limit: 50 })
+        .then((r) => r.data),
+    enabled: !!projectId,
+    staleTime: 30_000,
   });
 }

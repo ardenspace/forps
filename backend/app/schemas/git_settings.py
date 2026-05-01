@@ -58,3 +58,20 @@ class HandoffSummary(BaseModel):
 class ReprocessResponse(BaseModel):
     event_id: UUID
     status: str
+
+
+class GitEventSummary(BaseModel):
+    """GET /git-events 응답 — failed event list 용 작은 summary.
+
+    설계서: 2026-05-01-phase-5-followup-b2-design.md §2.3
+    commits / before_commit_sha 등 큰 필드 제외 (UI 불필요).
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    branch: str
+    head_commit_sha: str
+    pusher: str
+    received_at: datetime
+    processed_at: datetime | None
+    error: str | None

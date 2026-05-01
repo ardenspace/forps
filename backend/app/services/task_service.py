@@ -5,7 +5,8 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.task import Task
+from app.models.handoff import Handoff
+from app.models.task import Task, TaskSource
 from app.models.task_event import TaskEvent, TaskEventAction
 from app.schemas.task import TaskCreate, TaskUpdate, TaskFilters
 
@@ -15,6 +16,45 @@ def _task_query():
         selectinload(Task.assignee),
         selectinload(Task.reporter),
     )
+
+
+async def _annotate_handoff_missing(db: AsyncSession, tasks: list[Task]) -> None:
+    """Task 인스턴스에 .handoff_missing (bool) 비-mapped attribute 를 붙임.
+
+    설계서: 2026-05-01-phase-5-followup-b2-design.md §2.1
+    조건: source=SYNCED + last_commit_sha not null + archived_at null + 매칭 handoff 없음.
+    cross-project 안전 — get_week_tasks 처럼 여러 프로젝트 task 한 list 도 처리.
+    """
+    candidates = [
+        (t.project_id, t.last_commit_sha)
+        for t in tasks
+        if t.source == TaskSource.SYNCED_FROM_PLAN
+        and t.last_commit_sha is not None
+        and t.archived_at is None
+    ]
+    if not candidates:
+        for t in tasks:
+            t.handoff_missing = False
+        return
+
+    project_ids = list({c[0] for c in candidates})
+    shas = list({c[1] for c in candidates})
+    result = await db.execute(
+        select(Handoff.project_id, Handoff.commit_sha)
+        .where(
+            Handoff.project_id.in_(project_ids),
+            Handoff.commit_sha.in_(shas),
+        )
+    )
+    existing_pairs = {(row[0], row[1]) for row in result.all()}
+
+    for t in tasks:
+        t.handoff_missing = (
+            t.source == TaskSource.SYNCED_FROM_PLAN
+            and t.last_commit_sha is not None
+            and t.archived_at is None
+            and (t.project_id, t.last_commit_sha) not in existing_pairs
+        )
 
 
 async def get_week_tasks(
@@ -32,12 +72,17 @@ async def get_week_tasks(
         )
         .order_by(Task.due_date.is_(None), Task.due_date)
     )
-    return list(result.scalars().all())
+    tasks = list(result.scalars().all())
+    await _annotate_handoff_missing(db, tasks)
+    return tasks
 
 
 async def get_task(db: AsyncSession, task_id: UUID) -> Task | None:
     result = await db.execute(_task_query().where(Task.id == task_id))
-    return result.scalar_one_or_none()
+    task = result.scalar_one_or_none()
+    if task is not None:
+        await _annotate_handoff_missing(db, [task])
+    return task
 
 
 async def get_project_tasks(
@@ -58,7 +103,9 @@ async def get_project_tasks(
             stmt = stmt.where(Task.assignee_id == user_id)
 
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    tasks = list(result.scalars().all())
+    await _annotate_handoff_missing(db, tasks)
+    return tasks
 
 
 async def create_task(
