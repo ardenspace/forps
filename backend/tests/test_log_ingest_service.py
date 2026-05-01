@@ -309,7 +309,7 @@ async def test_ingest_batch_partial_success(async_session: AsyncSession, caplog)
     events[2]["version_sha"] = "abc"  # short SHA reject
     events[7]["unknown_field"] = "x"  # extra field reject
 
-    accepted, rejected = await log_ingest_service.ingest_batch(
+    accepted, rejected, _accepted_ids = await log_ingest_service.ingest_batch(
         async_session, token=token,
         payload_dict={"events": events},
         dropped_since_last=None,

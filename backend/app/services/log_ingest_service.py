@@ -192,10 +192,11 @@ async def ingest_batch(
     payload_dict: dict[str, Any],
     dropped_since_last: int | None = None,
     now: datetime | None = None,
-) -> tuple[int, list[dict]]:
+) -> tuple[int, list[dict], list]:
     """end-to-end: rate limit → validate (partial) → insert → commit.
 
-    Returns: (accepted_count, rejected_list).
+    Returns: (accepted_count, rejected_list, accepted_event_ids).
+    accepted_event_ids — INSERT 된 LogEvent 의 id 리스트 (caller 가 BackgroundTask 큐).
     payload_dict 의 events 가 없거나 빈 리스트면 caller (endpoint) 가 400 매핑하도록 raise.
     """
     if dropped_since_last is not None and dropped_since_last > 0:
@@ -236,4 +237,5 @@ async def ingest_batch(
     # token.last_used_at + RateLimitWindow + LogEvent batch 모두 commit
     await db.commit()
 
-    return len(accepted), rejected
+    accepted_ids = [e.id for e in accepted]
+    return len(accepted), rejected, accepted_ids

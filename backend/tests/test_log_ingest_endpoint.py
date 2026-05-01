@@ -242,3 +242,39 @@ async def test_ingest_db_failure_500(client_with_db, async_session: AsyncSession
             headers={"Authorization": bearer},
         )
     assert res.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_ingest_schedules_background_task_for_error_events_only(
+    client_with_db, async_session: AsyncSession,
+):
+    """ERROR/CRITICAL event 만 BackgroundTask 큐. INFO/WARNING 은 큐 안 됨."""
+    proj, token, secret = await _seed_token(async_session)
+    bearer = f"Bearer {token.id}.{secret}"
+
+    # 3 events: INFO / ERROR / CRITICAL
+    events = [_valid_event() for _ in range(3)]
+    events[0]["level"] = "INFO"
+    events[1]["level"] = "ERROR"
+    events[2]["level"] = "CRITICAL"
+
+    scheduled: list = []
+
+    async def fake_helper(event_id) -> None:
+        """BackgroundTask 대신 실행 — 실제 DB 없이 event_id 만 기록."""
+        scheduled.append(event_id)
+
+    with patch(
+        "app.api.v1.endpoints.log_ingest._process_log_event_in_new_session",
+        side_effect=fake_helper,
+    ):
+        res = await client_with_db.post(
+            "/api/v1/log-ingest",
+            json={"events": events},
+            headers={"Authorization": bearer},
+        )
+
+    assert res.status_code == 200
+    assert res.json()["accepted"] == 3
+    # ERROR + CRITICAL 만 큐 — INFO 는 안 됨
+    assert len(scheduled) == 2
