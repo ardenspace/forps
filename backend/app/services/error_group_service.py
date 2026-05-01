@@ -6,6 +6,7 @@ race-free: with_for_update + IntegrityError SAVEPOINT fallback (Phase 2 record_p
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -99,3 +100,54 @@ async def upsert(
         transitioned = _apply_update(existing, event)
         await db.flush()
         return GroupResult(group=existing, is_new=False, transitioned_to_regression=transitioned)
+
+
+# ---- 사용자 액션 기반 status 전이 ----
+
+# 합법 전이 매트릭스: (현재 status, action) -> 다음 status
+_LEGAL_TRANSITIONS: dict[tuple[ErrorGroupStatus, str], ErrorGroupStatus] = {
+    (ErrorGroupStatus.OPEN, "resolve"): ErrorGroupStatus.RESOLVED,
+    (ErrorGroupStatus.OPEN, "ignore"): ErrorGroupStatus.IGNORED,
+    (ErrorGroupStatus.RESOLVED, "reopen"): ErrorGroupStatus.OPEN,
+    (ErrorGroupStatus.IGNORED, "unmute"): ErrorGroupStatus.OPEN,
+    (ErrorGroupStatus.REGRESSED, "resolve"): ErrorGroupStatus.RESOLVED,
+    (ErrorGroupStatus.REGRESSED, "reopen"): ErrorGroupStatus.OPEN,
+}
+
+
+async def transition_status(
+    db: AsyncSession,
+    group: ErrorGroup,
+    *,
+    action: str,
+    user_id: UUID,
+    resolved_in_version_sha: str | None,
+) -> ErrorGroup:
+    """사용자 액션으로 ErrorGroup status 전이. 합법 전이만 허용.
+
+    Raises:
+        ValueError: 불법 전이 ((현재, action) tuple 이 _LEGAL_TRANSITIONS 에 없음).
+
+    Note: 호출자(endpoint)가 commit 책임 — `upsert` 와 같은 패턴.
+    """
+    key = (group.status, action)
+    next_status = _LEGAL_TRANSITIONS.get(key)
+    if next_status is None:
+        raise ValueError(
+            f"illegal transition: {group.status.value} + {action!r}"
+        )
+
+    group.status = next_status
+
+    if next_status == ErrorGroupStatus.RESOLVED:
+        group.resolved_at = datetime.utcnow()
+        group.resolved_by_user_id = user_id
+        group.resolved_in_version_sha = resolved_in_version_sha
+    elif next_status == ErrorGroupStatus.OPEN and action == "reopen":
+        # RESOLVED → OPEN 시 audit 필드 클리어.
+        group.resolved_at = None
+        group.resolved_by_user_id = None
+        group.resolved_in_version_sha = None
+
+    await db.flush()
+    return group

@@ -4,6 +4,7 @@
 """
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -68,6 +69,9 @@ class ErrorGroupSummary(BaseModel):
     first_seen_version_sha: str
     last_seen_at: datetime
     last_seen_version_sha: str
+    resolved_at: datetime | None = None
+    resolved_by_user_id: UUID | None = None
+    resolved_in_version_sha: str | None = None
 
 
 class ErrorGroupListResponse(BaseModel):
@@ -105,3 +109,13 @@ class ErrorGroupDetail(BaseModel):
     group: ErrorGroupSummary
     recent_events: list[LogEventSummary]
     git_context: GitContextWrapper
+
+
+# ---- PATCH /errors/{id} ----
+
+
+class ErrorGroupStatusUpdate(BaseModel):
+    """PATCH /errors/{id} 요청 body. action 기반 (status 직접 X)."""
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["resolve", "ignore", "reopen", "unmute"]
+    resolved_in_version_sha: str | None = None  # action='resolve' 일 때만 의미.

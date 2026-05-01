@@ -8,15 +8,18 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_project_member
 from app.database import get_db
-from app.models.error_group import ErrorGroupStatus
+from app.dependencies import CurrentUser
+from app.models.error_group import ErrorGroup, ErrorGroupStatus
 from app.models.workspace import WorkspaceRole
 from app.schemas.log_query import (
     ErrorGroupDetail,
     ErrorGroupListResponse,
+    ErrorGroupStatusUpdate,
     ErrorGroupSummary,
     GitContextBundle,
     GitContextWrapper,
@@ -25,7 +28,7 @@ from app.schemas.log_query import (
     LogEventSummary,
     TaskRef,
 )
-from app.services import log_query_service
+from app.services import error_group_service, log_query_service
 
 router = APIRouter(prefix="/projects", tags=["log-errors"])
 
@@ -87,3 +90,43 @@ async def get_error_detail(
             previous_good_sha=git_ctx["previous_good_sha"],
         ),
     )
+
+
+@router.patch(
+    "/{project_id}/errors/{group_id}",
+    response_model=ErrorGroupSummary,
+)
+async def patch_error_status(
+    project_id: UUID,
+    group_id: UUID,
+    update: ErrorGroupStatusUpdate,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        hide_existence=True,
+        denied_detail="Owner only",
+    )),
+):
+    """ErrorGroup status 전이 (resolve/ignore/reopen/unmute, OWNER 전용).
+
+    설계서: 2026-04-26-error-log-design.md §4.1 전이 다이어그램.
+    """
+    # row lock — 동시 PATCH 직렬화 (resolve vs ignore 동시 경쟁 방지)
+    stmt = select(ErrorGroup).where(ErrorGroup.id == group_id).with_for_update()
+    group = (await db.execute(stmt)).scalar_one_or_none()
+    if group is None or group.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Error group not found")
+
+    try:
+        updated = await error_group_service.transition_status(
+            db, group,
+            action=update.action,
+            user_id=user.id,
+            resolved_in_version_sha=update.resolved_in_version_sha,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    await db.commit()  # endpoint 가 commit 책임 (service 는 flush 만)
+    return ErrorGroupSummary.model_validate(updated)

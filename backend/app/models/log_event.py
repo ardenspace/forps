@@ -9,6 +9,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
+# version_sha 미확인 sentinel — ingest 레이어와 동일 값 (CHECK 제약: 40자 hex OR 'unknown')
+UNKNOWN_SHA: str = "unknown"
+
 
 class LogLevel(str, enum.Enum):
     DEBUG = "debug"
