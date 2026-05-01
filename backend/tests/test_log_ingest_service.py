@@ -117,3 +117,83 @@ async def test_verify_token_success_and_last_used(async_session: AsyncSession):
     verified = await log_ingest_service.verify_token(async_session, token.id, secret)
     assert verified.id == token.id
     assert verified.last_used_at is not None
+
+
+# ---- check_rate_limit ----
+
+async def test_check_rate_limit_first_call_inserts_window(async_session: AsyncSession):
+    """첫 호출 → RateLimitWindow row INSERT, event_count == batch_size."""
+    proj, token, _ = await _seed_project_and_token(async_session, rate_limit_per_minute=600)
+    now = datetime(2026, 5, 1, 10, 30, 45)
+
+    await log_ingest_service.check_rate_limit(
+        async_session, project_id=proj.id, token=token, batch_size=5, now=now,
+    )
+
+    from app.models.rate_limit_window import RateLimitWindow
+    expected_window = datetime(2026, 5, 1, 10, 30, 0)  # 분 truncate
+    row = await async_session.get(
+        RateLimitWindow, (proj.id, token.id, expected_window)
+    )
+    assert row is not None
+    assert row.event_count == 5
+
+
+async def test_check_rate_limit_same_minute_accumulates(async_session: AsyncSession):
+    """같은 분 재호출 → event_count 누적."""
+    proj, token, _ = await _seed_project_and_token(async_session, rate_limit_per_minute=600)
+    now = datetime(2026, 5, 1, 10, 30, 12)
+
+    await log_ingest_service.check_rate_limit(
+        async_session, project_id=proj.id, token=token, batch_size=5, now=now,
+    )
+    await log_ingest_service.check_rate_limit(
+        async_session, project_id=proj.id, token=token, batch_size=3,
+        now=datetime(2026, 5, 1, 10, 30, 47),  # 같은 분
+    )
+
+    from app.models.rate_limit_window import RateLimitWindow
+    row = await async_session.get(
+        RateLimitWindow, (proj.id, token.id, datetime(2026, 5, 1, 10, 30, 0))
+    )
+    assert row.event_count == 8
+
+
+async def test_check_rate_limit_exceeds_raises_429(async_session: AsyncSession):
+    """event_count > limit → 429 + Retry-After 헤더 (최대 60)."""
+    proj, token, _ = await _seed_project_and_token(async_session, rate_limit_per_minute=10)
+    now = datetime(2026, 5, 1, 10, 30, 30)
+
+    with pytest.raises(HTTPException) as exc:
+        await log_ingest_service.check_rate_limit(
+            async_session, project_id=proj.id, token=token, batch_size=11, now=now,
+        )
+    assert exc.value.status_code == 429
+    assert exc.value.detail == "Rate limit exceeded"
+    # Retry-After: 30초 남음 (60초 - 30초 경과)
+    retry_after = int(exc.value.headers["Retry-After"])
+    assert 1 <= retry_after <= 60
+
+
+async def test_check_rate_limit_next_minute_new_row(async_session: AsyncSession):
+    """다음 분 호출 → 새 RateLimitWindow row (event_count = batch_size)."""
+    proj, token, _ = await _seed_project_and_token(async_session, rate_limit_per_minute=600)
+
+    await log_ingest_service.check_rate_limit(
+        async_session, project_id=proj.id, token=token, batch_size=5,
+        now=datetime(2026, 5, 1, 10, 30, 30),
+    )
+    await log_ingest_service.check_rate_limit(
+        async_session, project_id=proj.id, token=token, batch_size=3,
+        now=datetime(2026, 5, 1, 10, 31, 5),  # 다음 분
+    )
+
+    from app.models.rate_limit_window import RateLimitWindow
+    row1 = await async_session.get(
+        RateLimitWindow, (proj.id, token.id, datetime(2026, 5, 1, 10, 30, 0))
+    )
+    row2 = await async_session.get(
+        RateLimitWindow, (proj.id, token.id, datetime(2026, 5, 1, 10, 31, 0))
+    )
+    assert row1.event_count == 5
+    assert row2.event_count == 3

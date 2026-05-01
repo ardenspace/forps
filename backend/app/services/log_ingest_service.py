@@ -5,14 +5,16 @@
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 import bcrypt
 from fastapi import HTTPException
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.log_ingest_token import LogIngestToken
+from app.models.rate_limit_window import RateLimitWindow
 
 logger = logging.getLogger(__name__)
 
@@ -66,3 +68,41 @@ async def verify_token(db: AsyncSession, key_id: UUID, secret: str) -> LogIngest
 
     token.last_used_at = datetime.utcnow()
     return token
+
+
+async def check_rate_limit(
+    db: AsyncSession,
+    *,
+    project_id: UUID,
+    token: LogIngestToken,
+    batch_size: int,
+    now: datetime,
+) -> None:
+    """RateLimitWindow UPSERT (분 truncate). limit 초과 시 429.
+
+    PostgreSQL ON CONFLICT DO UPDATE pattern — 단일 SQL.
+    """
+    window_start = now.replace(second=0, microsecond=0)
+
+    stmt = pg_insert(RateLimitWindow).values(
+        project_id=project_id,
+        token_id=token.id,
+        window_start=window_start,
+        event_count=batch_size,
+    ).on_conflict_do_update(
+        index_elements=["project_id", "token_id", "window_start"],
+        set_={"event_count": RateLimitWindow.event_count + batch_size},
+    ).returning(RateLimitWindow.event_count)
+
+    result = await db.execute(stmt)
+    new_count = result.scalar_one()
+
+    if new_count > token.rate_limit_per_minute:
+        # 다음 분까지 남은 초 (최대 60)
+        next_minute = window_start + timedelta(minutes=1)
+        seconds_remaining = max(1, int((next_minute - now).total_seconds()))
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded",
+            headers={"Retry-After": str(seconds_remaining)},
+        )
