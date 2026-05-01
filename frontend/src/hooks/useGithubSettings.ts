@@ -68,3 +68,14 @@ export function useFailedGitEvents(projectId: string | null) {
     staleTime: 30_000,
   });
 }
+
+// Phase 6 — Discord 알림 비활성화 해제 (재활성화 버튼)
+export function useResetDiscord(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.git.resetDiscord(projectId).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'git-settings'] });
+    },
+  });
+}
