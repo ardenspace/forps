@@ -10,8 +10,11 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.error_group import ErrorGroup, ErrorGroupStatus
+from app.models.git_push_event import GitPushEvent
+from app.models.handoff import Handoff
 from app.models.log_event import LogEvent, LogLevel
 from app.models.project import Project
+from app.models.task import Task, TaskSource, TaskStatus
 from app.models.workspace import Workspace
 from app.services import log_query_service
 
@@ -111,10 +114,6 @@ async def test_list_groups_pagination_total_correct(async_session: AsyncSession)
 
 
 # ---- get_group_detail ----
-
-from app.models.git_push_event import GitPushEvent
-from app.models.handoff import Handoff
-from app.models.task import Task, TaskSource, TaskStatus
 
 
 def _make_log_event(

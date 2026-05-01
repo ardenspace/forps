@@ -86,6 +86,8 @@ async def _find_previous_good_sha(
             le.c.version_sha != "unknown",
             le_target.c.id.is_(None),
         )
+        # 같은 SHA 의 다른 row 가 더 최근일 수도 있음 — row 단위 가장 최근.
+        # distinct SHA 수가 많을 때 의미 차이 있음. 진단용 — Phase 5 후속에서 SHA aggregate 고려.
         .order_by(le.c.received_at.desc())
         .limit(1)
     )
@@ -121,14 +123,16 @@ async def _collect_git_context(
         # archived 포함 (spec §4.2)
     )).scalars().all()
 
-    push_events = (await db.execute(
-        select(GitPushEvent).where(
+    first_push_stmt = (
+        select(GitPushEvent)
+        .where(
             GitPushEvent.project_id == project_id,
             GitPushEvent.head_commit_sha.in_(version_shas),
         )
-    )).scalars().all()
-
-    first_push = sorted(push_events, key=lambda e: e.received_at)[0] if push_events else None
+        .order_by(GitPushEvent.received_at.asc())
+        .limit(1)
+    )
+    first_push = (await db.execute(first_push_stmt)).scalar_one_or_none()
 
     return {
         "handoffs": list(handoffs),
@@ -169,6 +173,9 @@ async def get_group_detail(
     )
 
     previous_good_sha: str | None = None
+    # environment 는 recent 50 events 중 oldest 의 environment.
+    # 한 fingerprint 가 여러 environment 발생 시 부정확할 수 있음 (recent 50 에 진짜 first event 누락 가능).
+    # 후속: ErrorGroup 에 first_environment 컬럼 추가 검토.
     if recent_events:
         first_event = min(recent_events, key=lambda e: e.received_at)
         previous_good_sha = await _find_previous_good_sha(
