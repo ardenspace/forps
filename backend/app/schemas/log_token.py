@@ -31,3 +31,18 @@ class LogTokenRevokedResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     revoked_at: datetime
+
+
+class LogTokenSummary(BaseModel):
+    """GET /log-tokens 목록 항목. **secret 은 절대 노출 금지** (response_model 로 컴파일 시 보장)."""
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    name: str
+    rate_limit_per_minute: int
+    created_at: datetime
+    last_used_at: datetime | None
+    revoked_at: datetime | None
+
+
+class LogTokenListResponse(BaseModel):
+    items: list[LogTokenSummary]

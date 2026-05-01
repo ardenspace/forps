@@ -9,6 +9,7 @@ from uuid import UUID
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_project_member
@@ -17,8 +18,10 @@ from app.models.log_ingest_token import LogIngestToken
 from app.models.workspace import WorkspaceRole
 from app.schemas.log_token import (
     LogTokenCreate,
+    LogTokenListResponse,
     LogTokenResponse,
     LogTokenRevokedResponse,
+    LogTokenSummary,
 )
 
 
@@ -92,3 +95,33 @@ async def revoke_log_token(
     await db.refresh(token)
 
     return LogTokenRevokedResponse(id=token.id, revoked_at=token.revoked_at)
+
+
+@router.get(
+    "/{project_id}/log-tokens",
+    response_model=LogTokenListResponse,
+)
+async def list_log_tokens(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    include_revoked: bool = False,
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        hide_existence=True,
+        denied_detail="Owner only",
+    )),
+):
+    """프로젝트의 LogIngestToken 목록 (OWNER 전용).
+
+    secret 은 응답에 절대 포함 X (response_model 강제 필터).
+    include_revoked=true 시 revoked 포함, default False.
+    """
+    stmt = select(LogIngestToken).where(LogIngestToken.project_id == project_id)
+    if not include_revoked:
+        stmt = stmt.where(LogIngestToken.revoked_at.is_(None))
+    stmt = stmt.order_by(LogIngestToken.created_at.desc())
+
+    rows = (await db.execute(stmt)).scalars().all()
+    return LogTokenListResponse(
+        items=[LogTokenSummary.model_validate(t) for t in rows],
+    )
