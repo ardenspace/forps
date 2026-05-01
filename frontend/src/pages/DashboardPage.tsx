@@ -16,9 +16,11 @@ import { WeekView, getMonday } from '@/components/week/WeekView';
 import { TaskTableView } from '@/components/table/TaskTableView';
 import { ShareLinkManager } from '@/components/share/ShareLinkManager';
 import { AlertModal } from '@/components/ui/AlertModal';
+import { ErrorsList } from '@/components/errors/ErrorsList';
+import { ErrorDetail } from '@/components/errors/ErrorDetail';
 import type { Task } from '@/types/task';
 
-type ViewMode = 'board' | 'table' | 'week';
+type ViewMode = 'board' | 'table' | 'week' | 'errors';
 
 export function DashboardPage() {
   const { user, logout } = useAuth();
@@ -92,6 +94,7 @@ export function DashboardPage() {
   const [isShareManagerOpen, setShareManagerOpen] = useState(false);
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedErrorGroupId, setSelectedErrorGroupId] = useState<string | null>(null);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const swipeStartXRef = useRef<number | null>(null);
   const swipeStartYRef = useRef<number | null>(null);
@@ -120,6 +123,12 @@ export function DashboardPage() {
       setSelectedProject(projects[0].id);
     }
   }, [projects, selectedProjectId, setSelectedProject]);
+
+  useEffect(() => {
+    // 프로젝트 변경 시 선택된 에러 그룹 초기화.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedErrorGroupId(null);
+  }, [selectedProjectId]);
 
   const handleDeleteTask = (taskId: string) => {
     deleteTaskMutation.mutate(taskId);
@@ -352,6 +361,16 @@ export function DashboardPage() {
                 >
                   Week
                 </button>
+                <button
+                  className={`flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-[11px] sm:text-sm font-bold border-l-2 border-black transition-colors ${
+                    viewMode === 'errors'
+                      ? 'bg-black text-white'
+                      : 'bg-background hover:bg-yellow-100'
+                  }`}
+                  onClick={() => setViewMode('errors')}
+                >
+                  Errors
+                </button>
               </div>
             </div>
             <div className="flex items-center justify-between gap-3 sm:justify-end">
@@ -454,6 +473,29 @@ export function DashboardPage() {
                   />
                 )}
               </>
+            )
+          ) : viewMode === 'errors' ? (
+            !selectedProjectId ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center border-2 border-black shadow-[6px_6px_0px_0px_rgba(244,0,4,1)] bg-white p-6 sm:p-10 rounded">
+                  <p className="text-muted-foreground font-medium text-sm sm:text-base">
+                    ← 왼쪽에서 프로젝트를 선택하세요.
+                  </p>
+                </div>
+              </div>
+            ) : selectedErrorGroupId ? (
+              <ErrorDetail
+                projectId={selectedProjectId}
+                groupId={selectedErrorGroupId}
+                isOwner={myRole === 'owner'}
+                defaultResolveSha={selectedProject?.last_synced_commit_sha ?? null}
+                onBack={() => setSelectedErrorGroupId(null)}
+              />
+            ) : (
+              <ErrorsList
+                projectId={selectedProjectId}
+                onSelectGroup={(groupId) => setSelectedErrorGroupId(groupId)}
+              />
             )
           ) : isWeekLoading ? (
             <div className="flex items-center justify-center h-full">
