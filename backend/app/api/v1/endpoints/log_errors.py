@@ -8,6 +8,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_project_member
@@ -111,7 +112,9 @@ async def patch_error_status(
 
     설계서: 2026-04-26-error-log-design.md §4.1 전이 다이어그램.
     """
-    group = await db.get(ErrorGroup, group_id)
+    # row lock — 동시 PATCH 직렬화 (resolve vs ignore 동시 경쟁 방지)
+    stmt = select(ErrorGroup).where(ErrorGroup.id == group_id).with_for_update()
+    group = (await db.execute(stmt)).scalar_one_or_none()
     if group is None or group.project_id != project_id:
         raise HTTPException(status_code=404, detail="Error group not found")
 

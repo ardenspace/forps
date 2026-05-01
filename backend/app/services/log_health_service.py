@@ -9,7 +9,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.log_event import LogEvent
+from app.models.log_event import LogEvent, UNKNOWN_SHA
 
 
 _WINDOW = timedelta(hours=24)
@@ -32,7 +32,7 @@ async def compute_health(
     drift_seconds = _DRIFT_THRESHOLD.total_seconds()
     stmt = select(
         func.count().label("total"),
-        func.count().filter(LogEvent.version_sha == "unknown").label("unknown"),
+        func.count().filter(LogEvent.version_sha == UNKNOWN_SHA).label("unknown"),
         func.count().filter(
             func.abs(
                 func.extract("epoch", LogEvent.received_at - LogEvent.emitted_at)
