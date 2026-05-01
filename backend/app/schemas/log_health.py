@@ -12,6 +12,8 @@ class LogHealthResponse(BaseModel):
     unknown_sha_ratio = (version_sha == 'unknown' 이벤트 수) / (전체 이벤트 수)
     clock_drift_count = abs(received_at - emitted_at) > 1h 인 이벤트 수
     total_events = 24h 내 LogEvent 총 수
+
+    v2 추가 예정: `dropped_count_total` (X-Forps-Dropped-Since-Last 헤더 저장 인프라 필요).
     """
     total_events_24h: int
     unknown_sha_count_24h: int
