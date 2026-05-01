@@ -6,15 +6,15 @@
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_project_member
 from app.database import get_db
-from app.dependencies import CurrentUser
 from app.models.log_event import LogLevel
+from app.models.workspace import WorkspaceRole
 from app.schemas.log_query import LogEventListResponse, LogEventSummary
-from app.services import log_query_service, project_service
-from app.services.permission_service import get_effective_role
+from app.services import log_query_service
 
 router = APIRouter(prefix="/projects", tags=["log-logs"])
 
@@ -25,22 +25,15 @@ router = APIRouter(prefix="/projects", tags=["log-logs"])
 )
 async def list_logs(
     project_id: UUID,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
     level: LogLevel | None = None,
     since: datetime | None = None,
     q: str | None = Query(default=None, min_length=2, max_length=200),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
+    _role: WorkspaceRole = Depends(require_project_member(hide_existence=True)),
 ):
     """LogEvent 목록. q (풀텍스트) 사용 시 자동 level >= WARNING 필터."""
-    project = await project_service.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
     rows, total = await log_query_service.list_logs(
         db, project_id=project_id,
         level=level, since=since, q=q, offset=offset, limit=limit,

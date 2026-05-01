@@ -11,12 +11,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_project_member
 from app.config import settings
 from app.core.crypto import decrypt_secret, encrypt_secret, generate_webhook_secret
 from app.database import get_db
-from app.dependencies import CurrentUser
 from app.models.git_push_event import GitPushEvent
 from app.models.handoff import Handoff
+from app.models.workspace import WorkspaceRole
 from app.schemas.git_settings import (
     GitEventSummary,
     GitSettingsResponse,
@@ -26,7 +27,6 @@ from app.schemas.git_settings import (
     WebhookRegisterResponse,
 )
 from app.services import github_hook_service, project_service
-from app.services.permission_service import can_manage, get_effective_role
 
 logger = logging.getLogger(__name__)
 
@@ -66,15 +66,11 @@ def _build_git_settings_response(project) -> GitSettingsResponse:
 @router.get("/{project_id}/git-settings", response_model=GitSettingsResponse)
 async def get_git_settings(
     project_id: UUID,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(hide_existence=True)),
 ):
     project = await project_service.get_project(db, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
     return _build_git_settings_response(project)
@@ -84,18 +80,16 @@ async def get_git_settings(
 async def patch_git_settings(
     project_id: UUID,
     update: GitSettingsUpdate,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        hide_existence=True,
+        denied_detail="Owner only",
+    )),
 ):
     project = await project_service.get_project(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    if not can_manage(role):
-        raise HTTPException(status_code=403, detail="Owner only")
 
     data = update.model_dump(exclude_unset=True)
     for key in ("git_repo_url", "git_default_branch", "plan_path", "handoff_dir"):
@@ -116,8 +110,12 @@ async def patch_git_settings(
 )
 async def reset_discord(
     project_id: UUID,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        hide_existence=True,
+        denied_detail="Owner only",
+    )),
 ):
     """Discord 알림 비활성화 해제 — counter 0 + disabled_at NULL.
     설계서: 2026-05-01-phase-6-discord-notifications-design.md §3.5
@@ -125,11 +123,6 @@ async def reset_discord(
     project = await project_service.get_project(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    if not can_manage(role):
-        raise HTTPException(status_code=403, detail="Owner only")
 
     project.discord_consecutive_failures = 0
     project.discord_disabled_at = None
@@ -145,8 +138,12 @@ async def reset_discord(
 )
 async def register_webhook(
     project_id: UUID,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        hide_existence=True,
+        denied_detail="Owner only",
+    )),
 ):
     """GitHub repo 에 push webhook 자동 등록 (또는 갱신).
 
@@ -158,15 +155,9 @@ async def register_webhook(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    if not can_manage(role):
-        raise HTTPException(status_code=403, detail="Owner only")
-
     # B1 / I-2: 권한 검증 후 row lock 획득.
     # 동시 OWNER 호출 시 후행은 여기서 대기 → 선행 commit 후 webhook_secret_encrypted 갱신본 보고 진행.
-    # final commit (line ~172) 시 lock release. process_event 와 같은 단일 outer commit 구조라 안전.
+    # final commit 시 lock release. process_event 와 같은 단일 outer commit 구조라 안전.
     await db.refresh(project, with_for_update={"nowait": False})
 
     if not project.git_repo_url:
@@ -219,19 +210,12 @@ async def register_webhook(
 @router.get("/{project_id}/handoffs", response_model=list[HandoffSummary])
 async def list_handoffs(
     project_id: UUID,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
     branch: str | None = None,
     limit: int = 50,
+    _role: WorkspaceRole = Depends(require_project_member(hide_existence=True)),
 ):
     """프로젝트의 handoff 이력 조회 (branch 필터 + limit clamp)."""
-    project = await project_service.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
     limit = max(1, min(limit, 200))
 
     stmt = (
@@ -263,22 +247,15 @@ async def list_handoffs(
 )
 async def list_git_events(
     project_id: UUID,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
     failed_only: bool = True,
     limit: int = 50,
+    _role: WorkspaceRole = Depends(require_project_member(hide_existence=True)),
 ):
     """프로젝트의 git push event list — v1 은 failed only 가 의미 있는 case.
 
     설계서: 2026-05-01-phase-5-followup-b2-design.md §2.3
     """
-    project = await project_service.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
     limit = max(1, min(limit, 200))
 
     stmt = (
@@ -316,19 +293,14 @@ async def reprocess_git_event(
     project_id: UUID,
     event_id: UUID,
     background_tasks: BackgroundTasks,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        hide_existence=True,
+        denied_detail="Owner only",
+    )),
 ):
     """실패한 git push event 를 수동으로 재처리 큐에 추가 (OWNER 전용)."""
-    project = await project_service.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    if not can_manage(role):
-        raise HTTPException(status_code=403, detail="Owner only")
-
     event = await db.get(GitPushEvent, event_id)
     if event is None or event.project_id != project_id:
         raise HTTPException(status_code=404, detail="Event not found")

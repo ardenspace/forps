@@ -10,9 +10,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_project_member
 from app.database import get_db
-from app.dependencies import CurrentUser
 from app.models.error_group import ErrorGroupStatus
+from app.models.workspace import WorkspaceRole
 from app.schemas.log_query import (
     ErrorGroupDetail,
     ErrorGroupListResponse,
@@ -24,8 +25,7 @@ from app.schemas.log_query import (
     LogEventSummary,
     TaskRef,
 )
-from app.services import log_query_service, project_service
-from app.services.permission_service import get_effective_role
+from app.services import log_query_service
 
 router = APIRouter(prefix="/projects", tags=["log-errors"])
 
@@ -36,21 +36,14 @@ router = APIRouter(prefix="/projects", tags=["log-errors"])
 )
 async def list_errors(
     project_id: UUID,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
     status: ErrorGroupStatus | None = None,
     since: datetime | None = None,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
+    _role: WorkspaceRole = Depends(require_project_member(hide_existence=True)),
 ):
     """ErrorGroup 목록. 멤버 누구나 (VIEWER 포함)."""
-    project = await project_service.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
     rows, total = await log_query_service.list_groups(
         db, project_id=project_id,
         status=status, since=since, offset=offset, limit=limit,
@@ -68,17 +61,10 @@ async def list_errors(
 async def get_error_detail(
     project_id: UUID,
     group_id: UUID,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(hide_existence=True)),
 ):
     """ErrorGroup 상세 + recent events + git 컨텍스트 + 직전 정상 SHA."""
-    project = await project_service.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    role = await get_effective_role(db, user.id, project_id)
-    if role is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
     detail = await log_query_service.get_group_detail(
         db, project_id=project_id, group_id=group_id,
     )

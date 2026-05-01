@@ -2,15 +2,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import check_project_member, require_project_member
 from app.database import get_db
 from app.dependencies import CurrentUser
+from app.models.workspace import WorkspaceRole
 from app.schemas.share_link import (
     ShareLinkCreate,
     ShareLinkResponse,
     ShareLinkPublicResponse,
 )
 from app.services import share_link_service
-from app.services.permission_service import get_effective_role, can_manage
 
 router = APIRouter(tags=["share-links"])
 
@@ -25,12 +26,12 @@ async def create_share_link(
     data: ShareLinkCreate,
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        denied_detail="Only owner can create share links",
+    )),
 ):
     """공유 링크 생성 (Owner만)"""
-    role = await get_effective_role(db, user.id, project_id)
-    if not can_manage(role):
-        raise HTTPException(status_code=403, detail="Only owner can create share links")
-
     return await share_link_service.create_share_link(
         db, project_id, user.id, data.scope
     )
@@ -41,14 +42,13 @@ async def create_share_link(
 )
 async def list_share_links(
     project_id: UUID,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        denied_detail="Only owner can view share links",
+    )),
 ):
     """프로젝트의 공유 링크 목록 (Owner만)"""
-    role = await get_effective_role(db, user.id, project_id)
-    if not can_manage(role):
-        raise HTTPException(status_code=403, detail="Only owner can view share links")
-
     return await share_link_service.get_project_share_links(db, project_id)
 
 
@@ -65,11 +65,11 @@ async def deactivate_share_link(
     if not share_link:
         raise HTTPException(status_code=404, detail="Share link not found")
 
-    role = await get_effective_role(db, user.id, share_link.project_id)
-    if not can_manage(role):
-        raise HTTPException(
-            status_code=403, detail="Only owner can deactivate share links"
-        )
+    await check_project_member(
+        db, user.id, share_link.project_id,
+        min_role=WorkspaceRole.OWNER,
+        denied_detail="Only owner can deactivate share links",
+    )
 
     success = await share_link_service.deactivate_share_link(db, share_link_id)
     if not success:
@@ -91,11 +91,11 @@ async def activate_share_link(
     if not share_link:
         raise HTTPException(status_code=404, detail="Share link not found")
 
-    role = await get_effective_role(db, user.id, share_link.project_id)
-    if not can_manage(role):
-        raise HTTPException(
-            status_code=403, detail="Only owner can activate share links"
-        )
+    await check_project_member(
+        db, user.id, share_link.project_id,
+        min_role=WorkspaceRole.OWNER,
+        denied_detail="Only owner can activate share links",
+    )
 
     updated = await share_link_service.activate_share_link(db, share_link_id)
     if not updated:
@@ -113,9 +113,11 @@ async def delete_share_link(
     if not share_link:
         raise HTTPException(status_code=404, detail="Share link not found")
 
-    role = await get_effective_role(db, user.id, share_link.project_id)
-    if not can_manage(role):
-        raise HTTPException(status_code=403, detail="Only owner can delete share links")
+    await check_project_member(
+        db, user.id, share_link.project_id,
+        min_role=WorkspaceRole.OWNER,
+        denied_detail="Only owner can delete share links",
+    )
 
     success = await share_link_service.delete_share_link(db, share_link_id)
     if not success:

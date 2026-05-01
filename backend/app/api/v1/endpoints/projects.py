@@ -2,6 +2,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import check_project_member, require_project_member
 from app.database import get_db
 from app.dependencies import CurrentUser
 from app.models.workspace import WorkspaceRole
@@ -14,7 +15,7 @@ from app.schemas.project import (
     UpdateProjectMemberRequest,
 )
 from app.services import project_service, workspace_service
-from app.services.permission_service import get_effective_role, can_edit, can_manage
+from app.services.permission_service import can_edit
 
 router = APIRouter(tags=["projects"])
 
@@ -48,6 +49,7 @@ async def create_project(
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
+    # workspace-level membership 체크 — project 가 아직 없으므로 helper 미적용.
     my_membership = await workspace_service.get_user_membership(
         db, workspace_id, user.id
     )
@@ -76,9 +78,7 @@ async def get_workspace_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    role = await get_effective_role(db, user.id, project_id)
-    if not role:
-        raise HTTPException(status_code=403, detail="Permission denied")
+    role = await check_project_member(db, user.id, project_id)
 
     task_count = await project_service.get_project_task_count(db, project_id)
     resp = {**project.__dict__, "my_role": role, "task_count": task_count}
@@ -98,9 +98,7 @@ async def get_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    role = await get_effective_role(db, user.id, project_id)
-    if not role:
-        raise HTTPException(status_code=403, detail="Permission denied")
+    role = await check_project_member(db, user.id, project_id)
 
     task_count = await project_service.get_project_task_count(db, project_id)
     resp = {**project.__dict__, "my_role": role, "task_count": task_count}
@@ -124,9 +122,7 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    role = await get_effective_role(db, user.id, project_id)
-    if not can_edit(role):
-        raise HTTPException(status_code=403, detail="Permission denied")
+    role = await check_project_member(db, user.id, project_id, min_role=WorkspaceRole.EDITOR)
 
     updated_project = await project_service.update_project(db, project, data)
     task_count = await project_service.get_project_task_count(db, project_id)
@@ -150,9 +146,7 @@ async def delete_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    role = await get_effective_role(db, user.id, project_id)
-    if not can_manage(role):
-        raise HTTPException(status_code=403, detail="Permission denied")
+    await check_project_member(db, user.id, project_id, min_role=WorkspaceRole.OWNER)
 
     await project_service.delete_project(db, project)
 
@@ -162,13 +156,9 @@ async def delete_project(
 )
 async def list_project_members(
     project_id: UUID,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member()),
 ):
-    role = await get_effective_role(db, user.id, project_id)
-    if not role:
-        raise HTTPException(status_code=403, detail="Permission denied")
-
     return await project_service.get_project_members(db, project_id)
 
 
@@ -180,15 +170,12 @@ async def list_project_members(
 async def add_project_member(
     project_id: UUID,
     data: AddProjectMemberRequest,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        denied_detail="Only owner can manage project members",
+    )),
 ):
-    role = await get_effective_role(db, user.id, project_id)
-    if not can_manage(role):
-        raise HTTPException(
-            status_code=403, detail="Only owner can manage project members"
-        )
-
     target_user = await project_service.get_user_by_email(db, str(data.email))
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -206,15 +193,12 @@ async def update_project_member_role(
     project_id: UUID,
     member_user_id: UUID,
     data: UpdateProjectMemberRequest,
-    user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        denied_detail="Only owner can manage project members",
+    )),
 ):
-    role = await get_effective_role(db, user.id, project_id)
-    if not can_manage(role):
-        raise HTTPException(
-            status_code=403, detail="Only owner can manage project members"
-        )
-
     member = await project_service.get_project_member(db, project_id, member_user_id)
     if not member:
         raise HTTPException(status_code=404, detail="Project member not found")
@@ -233,13 +217,11 @@ async def remove_project_member(
     member_user_id: UUID,
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    _role: WorkspaceRole = Depends(require_project_member(
+        min_role=WorkspaceRole.OWNER,
+        denied_detail="Only owner can manage project members",
+    )),
 ):
-    role = await get_effective_role(db, user.id, project_id)
-    if not can_manage(role):
-        raise HTTPException(
-            status_code=403, detail="Only owner can manage project members"
-        )
-
     if member_user_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot remove yourself")
 
