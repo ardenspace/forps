@@ -1,5 +1,5 @@
 // Backend LogLevel enum wire value
-export type LogLevel = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL';
+export type LogLevel = 'debug' | 'info' | 'warning' | 'error' | 'critical';
 
 export interface LogEventSummary {
   id: string;
