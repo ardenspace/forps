@@ -35,7 +35,16 @@ async def process_event(
     fetch_file: FetchFile,
     fetch_compare: FetchCompare,
 ) -> None:
-    """진입점. 멱등 + 결정적 — 같은 event 두 번 호출해도 DB 변경 1회만."""
+    """진입점. 멱등 + 결정적 — 같은 event 두 번 호출해도 DB 변경 1회만.
+
+    B1 / I-4 layer 2: 진입 시 row-level lock 획득 (FOR UPDATE) 후 processed_at 재확인.
+    동시 호출 시 후행 caller 는 lock 대기 → 선행 caller commit 후 processed_at 갱신본 보고 return.
+    final commit 시 lock release. process_event 가 단일 outer commit 구조라 그대로 적용 가능.
+    """
+    # FOR UPDATE 로 row 점유 — 동시 caller 차단.
+    # SQLAlchemy 2.0: db.refresh(obj, with_for_update=...). nowait=False 로 lock 대기.
+    await db.refresh(event, with_for_update={"nowait": False})
+
     if event.processed_at is not None:
         logger.info("event %s already processed at %s — skip", event.id, event.processed_at)
         return
@@ -51,6 +60,10 @@ async def process_event(
 
     try:
         await _process_inner(db, event, project, fetch_file=fetch_file, fetch_compare=fetch_compare)
+        # M-6: 성공 시 project.last_synced_commit_sha 를 head 로 갱신.
+        # commits_truncated 의 Compare API base 로 사용됨 (sync_service._collect_changed_files).
+        # 실패 path (except 분기) 에서는 갱신 안 함 — 재처리 시 직전 성공 커밋 base 가 유지됨.
+        project.last_synced_commit_sha = event.head_commit_sha
         event.processed_at = datetime.utcnow()
         await db.commit()
     except Exception as exc:

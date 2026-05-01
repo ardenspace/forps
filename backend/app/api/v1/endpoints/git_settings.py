@@ -131,6 +131,11 @@ async def register_webhook(
     if not can_manage(role):
         raise HTTPException(status_code=403, detail="Owner only")
 
+    # B1 / I-2: 권한 검증 후 row lock 획득.
+    # 동시 OWNER 호출 시 후행은 여기서 대기 → 선행 commit 후 webhook_secret_encrypted 갱신본 보고 진행.
+    # final commit (line ~172) 시 lock release. process_event 와 같은 단일 outer commit 구조라 안전.
+    await db.refresh(project, with_for_update={"nowait": False})
+
     if not project.git_repo_url:
         raise HTTPException(status_code=400, detail="git_repo_url 미설정")
     if project.github_pat_encrypted is None:
@@ -243,6 +248,16 @@ async def reprocess_git_event(
     event = await db.get(GitPushEvent, event_id)
     if event is None or event.project_id != project_id:
         raise HTTPException(status_code=404, detail="Event not found")
+
+    # B1 / I-4 layer 1: in-flight 거부.
+    # processed_at IS NULL = 초기 BackgroundTask 가 아직 처리 중이거나 reaper 회수 대기.
+    # 이 시점에 reprocess 트리거하면 두 process_event 가 같은 event 로 동시 실행 → TaskEvent 중복.
+    # reaper 가 5분 grace 후 회수 가능하므로 사용자는 기다리거나 재처리 대신 reaper 에 위임.
+    if event.processed_at is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Event is still being processed — please try again shortly",
+        )
 
     if event.processed_at is not None and event.error is None:
         raise HTTPException(

@@ -1,5 +1,52 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-05-01 (Phase 5 follow-up B1)
+
+- [x] **B1 — Quality fixes (race + 미사용 컬럼 + refactor)** — 브랜치 `feature/phase-5-followup-b1-quality`
+  - [x] **M-10**: `auth_headers / parse_repo / raise_for_status` public promote (rename, 9 callsite — `github_hook_service` 의 cross-module underscore-import 위반 해소). Commit `dc718bf`.
+  - [x] **M-6**: `sync_service` 가 success 시 `Project.last_synced_commit_sha = event.head_commit_sha` write — `commits_truncated` Compare API base 정확화. 실패 path 는 그대로 (재처리 시 직전 base 보존). 회귀 테스트 2건. Commit `e0da55e`.
+  - [x] **I-4 layer 1**: `reprocess` endpoint 가 `processed_at IS NULL` event 거부 (409 Conflict) — webhook 직후 BackgroundTask 가 끝나기 전 사용자 클릭 race 차단 (가장 흔한 시나리오). Commit `0a78a0a`.
+  - [x] **I-4 layer 2**: `process_event` entry 에 `db.refresh(event, with_for_update={"nowait": False})` — DB row lock 으로 동시 호출 직렬화. 결정적 race 테스트 (`asyncio.Event` + slow fetcher 로 두 session lock 경쟁 — fix 없이는 counter==2 + UNIQUE violation 동시 발생). Commit `786b49c`.
+  - [x] **I-2**: `register_webhook` 진입에 `db.refresh(project, with_for_update={"nowait": False})` — 동시 OWNER 호출 시 후행이 선행 final commit 까지 대기 → 갱신된 hook 보고 `update_hook` 분기로 떨어짐. fix 없으면 `create_hook` 2번 + DB/GitHub secret mismatch. 결정적 race 테스트. Commit `1644fea`.
+  - [x] **Polish (code review nit fix)**: "reaper" 단어 → "please try again shortly" (B2 GitEventList 모달이 detail 렌더 예정 — 내부 jargon 제거), test 의 `Maker_a/b → maker_a/b` (CLAUDE.md snake_case 준수). Commit `37f1afc`.
+  - [x] **검증**: backend **175 tests pass** (170 baseline + 5 신규: M-6 success / M-6 failure / I-4 409 / I-4 race / I-2 race). race 테스트 2건은 3-5회 반복 실행해 flake 없음 확인. **시각 검증 / e2e webhook 수신 테스트는 사용자 dev server 직접** (수신 endpoint 변경 없음, race fix 만이라 영향 최소).
+
+### 마지막 커밋
+
+- forps: `<sha> docs(handoff): Phase 5 follow-up B1 완료 + B2/Phase 6 다음 할 일`
+- 브랜치 base: `27e8b56` (main, Makefile chore 직후)
+
+### 다음 (B2 — Phase 5b UI 후속 / 그 후 Phase 6)
+
+**B2 — Phase 5b UI 후속** (별도 plan):
+- [ ] **TaskCard ⚠️ handoff 누락 표시** — 데이터 정의 (Task `last_commit_sha` join → Handoff 존재 여부, backend 필드 또는 계산 추가)
+- [ ] **GitEventList 모달 + `useReprocessEvent` 호출 site** — sync 실패 이벤트 list 모달 (현재 `useReprocessEvent` 훅만 만들어둠, 호출 site 미구현). 이번 polish 로 detail 메시지가 user-friendly 해졌으니 그대로 토스트 노출 가능.
+
+**Phase 6 — Discord 알림 통합** (B2 머지 후):
+- [ ] `discord_service` 확장 — 체크 변경 요약 / handoff 누락 경고 / 롤백 알림 템플릿 3종
+- [ ] `sync_service` 가 알림 트리거 (DB 변경 후 fire-and-forget BackgroundTask)
+- [ ] `Project.discord_webhook_url` 미설정 시 silent skip
+- [ ] cooldown 정책 (spec §8 — 3회 연속 실패 시 disable)
+
+### 블로커
+
+없음
+
+### 메모 (2026-05-01 B1 추가)
+
+- **`db.refresh(obj, with_for_update={"nowait": False})` 패턴**: SQLAlchemy 2.0 async 에서 in-memory ORM object 의 row lock 재획득 표준 방식. `select(...).with_for_update()` 는 새 query 라 obj 가 expire — refresh 가 더 적합. 본 phase 의 두 race fix (I-2/I-4) 모두 이 패턴 사용. dict-form `{"nowait": False}` 는 SQLAlchemy 2.0 에서 그대로 동작 (boolean `True` fallback 도 가능).
+- **race 테스트 결정성**: testcontainers PG 가 빨라서 단순 `asyncio.gather` 두 호출은 race 가 우연히 안 일어나고 PASS — fix 없는 코드도 PASS = 무력 테스트. `asyncio.Event` (`t1_inside_fetch`/`t1_inside_list` + `release`) + slow 가짜 fetcher 로 T1 이 work 도중에 T2 가 entry FOR UPDATE 에서 대기하도록 강제. 두 별도 engine (per-test DB 의 `upgraded_db["async_url"]` 두 번 바인딩) 으로 PG row lock 실제 경쟁 검증. 검증된 패턴 — 향후 race 테스트는 같은 구조 재사용.
+- **lock 보유 시간**: `register_webhook` 의 lock 은 GitHub `list_hooks + create/update_hook` 호출 동안 보유 — 정상 200ms~1s, 최악 30s timeout. 같은 project row 의 다른 write (PATCH git-settings 등) 가 그 동안 block. setup endpoint 라 OK (저빈도). 만약 hot path 에 같은 패턴 적용한다면 advisory lock / two-phase 검토.
+- **M-6 갱신 시점 결정**: `_process_inner` 가 PLAN/handoff 변경 없어 early return 한 path 도 `last_synced_commit_sha` 갱신 — head 가 깨끗하게 검사된 commit 이라 다음 truncated push 의 base 후보로 유효. 단 success path 만 갱신, failure path 는 직전 base 보존 (재처리 정확성).
+- **process_event 의 multi-flush vs single-commit**: `_apply_plan` 내부의 `await db.flush()` 들은 SQL 만 보내고 commit 안 함 — row lock 유지. `_apply_handoff` 의 `async with db.begin_nested()` 는 SAVEPOINT (외부 tx lock 유지). 실제 `db.commit()` 은 `process_event` outer 에서 한 번 — 이 구조라 entry FOR UPDATE 가 final commit 까지 lock 유지 가능. 향후 inner commit 추가되면 lock 모델 재검토.
+- **Code review nit followup (B2 또는 후속)**:
+  - sync_service.py module-level docstring (line 1-13) 의 step list 가 `last_synced_commit_sha` 갱신 누락 — 1줄 추가하면 정확. 본 phase 안 함 (M-6 commit 의 inline 코멘트로 충분).
+  - test_git_settings_endpoint.py 의 race 테스트 docstring narrative 가 약간 idealized — 실제 race 는 lock 으로 만들어내는 ordering 임. 기능 영향 없음.
+  - test_sync_service.py 의 `t1_inside_fetch` event 이름 — 50ms head-start 로 reliably T1 이지만 보장은 아님. 기능 OK.
+- **next 할 일은 B2** (Phase 5b UI 후속). B2 머지 후 Phase 6 (Discord 알림) 진입.
+
+---
+
 ## 2026-04-30 (Phase 5b)
 
 - [x] **Phase 5b 완료** — Frontend UI (브랜치 `feature/phase-5b-frontend-ui`)

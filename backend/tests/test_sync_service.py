@@ -814,3 +814,152 @@ async def test_collect_changed_files_skips_null_sha_before(async_session: AsyncS
 
     # null sha skip → project.last_synced_commit_sha (= "f" * 40) 사용
     assert captured["base"] == "f" * 40
+
+
+# ---------------------------------------------------------------------------
+# B1 / M-6: last_synced_commit_sha update on success
+# ---------------------------------------------------------------------------
+
+
+async def test_process_event_updates_last_synced_on_plan_success(
+    async_session: AsyncSession,
+):
+    """정상 처리 (PLAN 변경 reflect) 후 project.last_synced_commit_sha == event.head_commit_sha."""
+    proj = await _seed_project(async_session)
+    head = "f" * 40
+    event = await _seed_event(
+        async_session,
+        proj,
+        head_sha=head,
+        commits=[{"id": head, "modified": ["PLAN.md"], "added": []}],
+    )
+
+    async def fake_fetch_file(repo, pat, sha, path):
+        return "## 태스크\n\n- [ ] [task-001] T — @alice"
+
+    async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
+        return ["PLAN.md"]
+
+    await process_event(
+        async_session, event, fetch_file=fake_fetch_file, fetch_compare=fake_compare,
+    )
+
+    await async_session.refresh(proj)
+    assert proj.last_synced_commit_sha == head
+    await async_session.refresh(event)
+    assert event.processed_at is not None
+    assert event.error is None
+
+
+async def test_process_event_does_not_update_last_synced_on_failure(
+    async_session: AsyncSession,
+):
+    """fetch_file 가 raise → process_event 가 catch + event.error 기록.
+    이 case 에서는 last_synced_commit_sha 갱신 X (재처리 시 정확한 base 보존)."""
+    proj = await _seed_project(async_session)
+    proj.last_synced_commit_sha = "a" * 40  # 이전 처리분
+    await async_session.commit()
+    await async_session.refresh(proj)
+
+    head = "b" * 40
+    event = await _seed_event(
+        async_session,
+        proj,
+        head_sha=head,
+        commits=[{"id": head, "modified": ["PLAN.md"], "added": []}],
+    )
+
+    async def fake_fetch_file(repo, pat, sha, path):
+        raise RuntimeError("github 502")
+
+    async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
+        return ["PLAN.md"]
+
+    await process_event(
+        async_session, event, fetch_file=fake_fetch_file, fetch_compare=fake_compare,
+    )
+
+    await async_session.refresh(proj)
+    assert proj.last_synced_commit_sha == "a" * 40  # 이전 값 유지
+    await async_session.refresh(event)
+    assert event.error is not None
+    assert "RuntimeError" in event.error
+
+
+# ---------------------------------------------------------------------------
+# B1 / I-4 layer 2: process_event SELECT FOR UPDATE 재진입 가드
+# ---------------------------------------------------------------------------
+
+import asyncio
+
+
+async def test_concurrent_process_event_only_runs_once(
+    async_session: AsyncSession, upgraded_db,
+):
+    """같은 event 를 두 session 이 동시에 process_event 호출 → fetch 는 1번만 실행.
+    FOR UPDATE row lock 으로 T2 가 T1 final commit 까지 대기 → processed_at 보고 즉시 return.
+    fix 없으면 두 호출 다 fetch → counter == 2.
+    """
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    proj = await _seed_project(async_session)
+    head = "c" * 40
+    event = await _seed_event(
+        async_session,
+        proj,
+        head_sha=head,
+        commits=[{"id": head, "modified": ["PLAN.md"], "added": []}],
+    )
+    event_id = event.id
+
+    # 같은 per-test DB 에 별도 engine 두 개 — 두 독립 세션이 row lock 경쟁하도록.
+    dsn = upgraded_db["async_url"]
+    engine_a = create_async_engine(dsn, echo=False)
+    engine_b = create_async_engine(dsn, echo=False)
+    maker_a = async_sessionmaker(engine_a, expire_on_commit=False)
+    maker_b = async_sessionmaker(engine_b, expire_on_commit=False)
+
+    counter = {"n": 0}
+    release = asyncio.Event()
+    t1_inside_fetch = asyncio.Event()
+
+    async def slow_fetch_file(repo, pat, sha, path):
+        counter["n"] += 1
+        if counter["n"] == 1:
+            t1_inside_fetch.set()
+        await release.wait()
+        return "## 태스크\n\n- [ ] [task-001] T — @alice"
+
+    async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
+        return ["PLAN.md"]
+
+    async def runner(maker):
+        async with maker() as db:
+            ev = await db.get(GitPushEvent, event_id)
+            await process_event(
+                db, ev, fetch_file=slow_fetch_file, fetch_compare=fake_compare,
+            )
+
+    async def releaser():
+        # T1 이 fetch 까지 들어간 시점에 T2 도 entry FOR UPDATE 에서 대기 중이도록 시간 둠.
+        await t1_inside_fetch.wait()
+        await asyncio.sleep(0.4)
+        release.set()
+
+    try:
+        # T1 먼저 시작해 lock 획득. T2 는 약간 후에 시작해 entry 에서 대기.
+        t1 = asyncio.create_task(runner(maker_a))
+        await asyncio.sleep(0.05)
+        t2 = asyncio.create_task(runner(maker_b))
+        rel = asyncio.create_task(releaser())
+        await asyncio.gather(t1, t2, rel)
+    finally:
+        await engine_a.dispose()
+        await engine_b.dispose()
+
+    # 핵심: fetch 가 정확히 1번만 호출됨 — T2 는 lock 대기 → processed_at 보고 return.
+    # fix 없으면 counter["n"] == 2.
+    assert counter["n"] == 1, (
+        f"expected fetch to be called once but was called {counter['n']} times — "
+        "FOR UPDATE re-read 가 process_event entry 에 적용되지 않음"
+    )
