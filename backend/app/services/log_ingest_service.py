@@ -150,6 +150,11 @@ def validate_event(
     except ValueError:
         return None, {"index": index, "reason": f"level invalid: {parsed.level}"}
 
+    # timezone-aware → naive UTC (DB 컬럼 TIMESTAMP WITHOUT TIME ZONE)
+    emitted_at = parsed.emitted_at
+    if emitted_at.tzinfo is not None:
+        emitted_at = emitted_at.replace(tzinfo=None)
+
     log_event = LogEvent(
         project_id=project_id,
         level=level,
@@ -158,7 +163,7 @@ def validate_event(
         version_sha=parsed.version_sha,
         environment=parsed.environment,
         hostname=parsed.hostname,
-        emitted_at=parsed.emitted_at,
+        emitted_at=emitted_at,
         exception_class=parsed.exception_class,
         exception_message=parsed.exception_message,
         stack_trace=parsed.stack_trace,
@@ -178,3 +183,57 @@ async def insert_events(db: AsyncSession, events: list[LogEvent]) -> int:
     db.add_all(events)
     await db.flush()
     return len(events)
+
+
+async def ingest_batch(
+    db: AsyncSession,
+    *,
+    token: LogIngestToken,
+    payload_dict: dict[str, Any],
+    dropped_since_last: int | None = None,
+    now: datetime | None = None,
+) -> tuple[int, list[dict]]:
+    """end-to-end: rate limit → validate (partial) → insert → commit.
+
+    Returns: (accepted_count, rejected_list).
+    payload_dict 의 events 가 없거나 빈 리스트면 caller (endpoint) 가 400 매핑하도록 raise.
+    """
+    if dropped_since_last is not None and dropped_since_last > 0:
+        logger.warning(
+            "log_ingest token=%s dropped %d events since last batch",
+            token.id, dropped_since_last,
+        )
+
+    events_raw = payload_dict.get("events")
+    if not isinstance(events_raw, list) or not events_raw:
+        # caller 가 400 매핑 — 빈/잘못된 events
+        raise HTTPException(status_code=400, detail="events list required and non-empty")
+
+    now = now or datetime.utcnow()
+
+    # last_used_at 갱신 (verify_token 이 in-memory 설정했을 수도 있고, 직접 호출일 수도 있음)
+    token.last_used_at = now
+
+    # rate limit — 전체 batch_size 기준
+    await check_rate_limit(
+        db, project_id=token.project_id, token=token,
+        batch_size=len(events_raw), now=now,
+    )
+
+    # per-event validate (partial success)
+    accepted: list[LogEvent] = []
+    rejected: list[dict] = []
+    for index, event_dict in enumerate(events_raw):
+        log_event, rejection = validate_event(event_dict, index, token.project_id)
+        if log_event is not None:
+            accepted.append(log_event)
+        else:
+            rejected.append(rejection)
+
+    if accepted:
+        await insert_events(db, accepted)
+
+    # token.last_used_at + RateLimitWindow + LogEvent batch 모두 commit
+    await db.commit()
+
+    return len(accepted), rejected

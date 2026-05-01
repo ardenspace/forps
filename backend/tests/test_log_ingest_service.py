@@ -297,3 +297,57 @@ async def test_insert_events_batch_inserts_with_null_fingerprint(async_session: 
     for row in rows:
         assert row.fingerprint is None
         assert row.fingerprinted_at is None
+
+
+# ---- ingest_batch ----
+
+async def test_ingest_batch_partial_success(async_session: AsyncSession, caplog):
+    """10 events 중 8 valid 2 invalid → accepted=8, rejected=2건. DB 8 행."""
+    proj, token, _ = await _seed_project_and_token(async_session)
+
+    events = [_valid_event_dict() for _ in range(10)]
+    events[2]["version_sha"] = "abc"  # short SHA reject
+    events[7]["unknown_field"] = "x"  # extra field reject
+
+    accepted, rejected = await log_ingest_service.ingest_batch(
+        async_session, token=token,
+        payload_dict={"events": events},
+        dropped_since_last=None,
+    )
+
+    assert accepted == 8
+    assert len(rejected) == 2
+    rejected_indices = {r["index"] for r in rejected}
+    assert rejected_indices == {2, 7}
+
+    # DB 8 행
+    from sqlalchemy import select
+    from app.models.log_event import LogEvent
+    rows = (await async_session.execute(
+        select(LogEvent).where(LogEvent.project_id == proj.id)
+    )).scalars().all()
+    assert len(rows) == 8
+
+    # last_used_at 갱신 (commit 됨)
+    await async_session.refresh(token)
+    assert token.last_used_at is not None
+
+
+async def test_ingest_batch_dropped_header_logs_warning(
+    async_session: AsyncSession, caplog,
+):
+    """X-Forps-Dropped-Since-Last 받으면 logger.warning."""
+    import logging
+    proj, token, _ = await _seed_project_and_token(async_session)
+
+    with caplog.at_level(logging.WARNING, logger="app.services.log_ingest_service"):
+        await log_ingest_service.ingest_batch(
+            async_session, token=token,
+            payload_dict={"events": [_valid_event_dict()]},
+            dropped_since_last=42,
+        )
+
+    assert any(
+        "dropped" in record.message.lower() and "42" in record.message
+        for record in caplog.records
+    )
