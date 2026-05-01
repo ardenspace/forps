@@ -1,5 +1,48 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-05-01 (Error-log Phase 2a — Ingest endpoint + Token API)
+
+- [x] **Error-log Phase 2a — Ingest endpoint + Token API** — 브랜치 `feature/error-log-phase2-ingest`
+  - [x] **Pydantic schemas**: `LogEventInput / IngestPayload / RejectedEvent / IngestResponse / StackFrame` (log_ingest), `LogTokenCreate / LogTokenResponse / LogTokenRevokedResponse` (log_token). 모두 `extra="forbid"`.
+  - [x] **`log_ingest_service` (6 함수)**: parse_token (Bearer <key_id>.<secret>) / verify_token (asyncio.to_thread bcrypt + last_used_at 갱신) / check_rate_limit (PostgreSQL UPSERT, 분 truncate, 429 + Retry-After) / validate_event (Pydantic + version_sha 형식 + extra 4KB + tz strip) / insert_events (batch INSERT, fingerprint=NULL) / ingest_batch (composition + commit).
+  - [x] **POST `/api/v1/log-ingest`**: gzip 지원, partial success 200 + rejected list, 모든 invalid 400, 인증 401 (timing attack 회피 — 모두 "Invalid token"), rate 429 + Retry-After, DB fail 500.
+  - [x] **POST `/api/v1/projects/{id}/log-tokens`** (OWNER): `secrets.token_urlsafe(32)` + bcrypt cost 12, 평문 token 응답 1회만.
+  - [x] **DELETE `/api/v1/projects/{id}/log-tokens/{id}`** (OWNER): soft delete (revoked_at = now), 이미 revoked 400, 다른 project token 404.
+  - [x] **deviation 1 (722928e)**: `validate_event` 가 `emitted_at.replace(tzinfo=None)` 로 tz strip — Pydantic 이 `"...Z"` 를 tz-aware 로 파싱하지만 DB 컬럼이 TIMESTAMP WITHOUT TIME ZONE. real bug fix, validate_event 레벨 (모든 caller 자동 적용).
+  - [x] **deviation 2 (722928e)**: `ingest_batch` 도 `token.last_used_at = now` set — verify_token 도 set 하므로 production path 에서 중복. 단순 in-memory overwrite, harmless. 테스트가 verify_token bypass 할 때도 통과.
+  - [x] **마이그레이션 신규 없음** — Phase 1 alembic 이 모든 컬럼 (`LogIngestToken / RateLimitWindow / LogEvent + rate_limit_per_minute`) 이미 포함.
+  - [x] **검증**: backend **230 tests pass** (198 baseline + 32 신규: 14 service + 4 token + 8 ingest endpoint + 6 validate). app-chak handler 가 미사용 상태로 대기 중 (`FORPS_LOG_ENDPOINT` 비어있음) — 본 phase 머지 즉시 e2e 가능 (토큰 발급 → app-chak `.env` 설정 → 자동 활성).
+
+### 마지막 커밋
+
+- forps: `<sha> docs(handoff+plan): Error-log Phase 2a 완료 + Phase 2b/3 다음 할 일`
+- 브랜치 base: `7e51c20` (main, Phase 6 PR #15 머지 직후)
+
+### 다음 (Error-log Phase 2b / Phase 3)
+
+- **Phase 2b** (운영 인프라): `log_fingerprint_reaper` (부팅 시 `fingerprinted_at IS NULL` 회수 — Phase 3 의 fingerprint_service 와 같이) + `log_health_service` (hourly cron — unknown SHA 비율 / 시계 어긋남 추적). reaper 는 Phase 3 의존성 — Phase 3 와 묶음 권장.
+- **Phase 3** (fingerprint + ErrorGroup): `fingerprint_service` (예외 → 결정적 fingerprint) + `error_group_service` (UPSERT + 신규/spike/regression 감지 + cooldown). ingest endpoint 가 BackgroundTask 로 fingerprint 처리 trigger. 핵심 가치 (에러 그룹화) 전달.
+
+### 블로커
+
+없음
+
+### 메모 (2026-05-01 Error-log Phase 2a 추가)
+
+- **bcrypt cost 12 + asyncio.to_thread 패턴**: 동기 bcrypt.checkpw 를 async endpoint 에서 호출 시 event loop block — `await asyncio.to_thread(bcrypt.checkpw, ...)` 로 wrapping. test 에선 cost 4 사용 (속도 — `bcrypt.gensalt(rounds=4)`).
+- **timing attack 회피 — fast-path 선택**: 401 detail 모두 "Invalid token" 통일했지만 key_id lookup fail 시 bcrypt 호출 안 함 (~250ms 응답 시간 차이 노출). dummy bcrypt 호출은 비용 / 복잡도 비효율 — v1 는 fast-path 우선. Phase 2b 또는 보안 호소 시 dummy bcrypt 보강.
+- **`secrets.token_urlsafe(32)` for secret 생성**: 256-bit (32 bytes) base64 url-safe (~43자). DB 에는 bcrypt(secret, cost=12) 만 저장.
+- **Soft delete (revoked_at)**: past LogEvent / RateLimitWindow 의 FK 보존. hard delete 안 함. revoked 토큰은 verify_token 가 401 반환.
+- **token.project_id 강제 사용** (security): ingest 시 클라이언트가 다른 project 의 LogEvent INSERT 못 하게 token 의 project_id 만 사용. 외부 input 무시 (extra="forbid" 가 1차 방어, validate_event 가 2차 강제).
+- **PostgreSQL UPSERT pattern (RateLimitWindow)**: `pg_insert(...).on_conflict_do_update(set_={"event_count": Model.event_count + N}).returning(...)` — 단일 SQL, race-free. set_ 의 `Model.event_count` 는 EXISTING row 의 값 참조 (NOT EXCLUDED).
+- **Partial validation 200 + rejected list**: 페이로드 N건 중 일부만 invalid → 200 + `{accepted, rejected}`. 모두 invalid → 400. spec §6.1 "나머지는 정상 처리" 직접 매칭.
+- **gzip middleware 미사용**: FastAPI 기본 GZip middleware 는 응답 압축만 처리. 요청 body decompress 는 endpoint 가 직접 `gzip.decompress(body)` — 명시적이고 단순.
+- **timezone-aware datetime 함정 학습**: Pydantic 이 ISO `"...Z"` 를 tz-aware datetime 으로 파싱. DB 컬럼이 `TIMESTAMP WITHOUT TIME ZONE` 이면 INSERT 실패. 해결: validate_event 가 `emitted_at.replace(tzinfo=None)` 로 strip. 향후 다른 datetime 필드 추가 시 같은 패턴 주의.
+- **마이그레이션 신규 없음 학습 (Phase 6 와 같은 패턴)**: Phase 1 의 통합 alembic (`c4dee7f06004`) 이 task-automation + error-log 의 모든 모델/컬럼을 한 번에 추가. error-log 본 phase 는 schema 변경 0 — 순수 service/endpoint 레이어.
+- **next 가능 옵션**: Phase 3 (fingerprint + ErrorGroup) 진입. ingest endpoint 에 BackgroundTask 추가해 fingerprint 처리 trigger. log_fingerprint_reaper 도 같이 묶음.
+
+---
+
 ## 2026-05-01 (Phase 6 — Discord 알림 통합 본편)
 
 - [x] **Phase 6 — Discord 알림 통합 본편** — 브랜치 `feature/phase-6-discord-notifications`
