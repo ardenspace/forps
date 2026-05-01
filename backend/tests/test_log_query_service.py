@@ -238,3 +238,89 @@ async def test_get_group_detail_returns_none_for_other_project(async_session: As
         async_session, project_id=proj_a.id, group_id=group.id,
     )
     assert detail is None
+
+
+# ---- list_logs ----
+
+async def test_list_logs_filter_by_level(async_session: AsyncSession):
+    """level=ERROR 필터 (단일 값 매칭)."""
+    proj = await _seed_project(async_session)
+    e_error = _make_log_event(proj, fingerprint="fp-1")
+    e_error.level = LogLevel.ERROR
+    e_warning = _make_log_event(proj, fingerprint="fp-2")
+    e_warning.level = LogLevel.WARNING
+    async_session.add_all([e_error, e_warning])
+    await async_session.commit()
+
+    rows, total = await log_query_service.list_logs(
+        async_session, project_id=proj.id, level=LogLevel.ERROR,
+    )
+    assert total == 1
+    assert rows[0].level == LogLevel.ERROR
+
+
+async def test_list_logs_filter_by_since(async_session: AsyncSession):
+    """since 필터 (received_at >= since).
+
+    Note: log_events 는 received_at 기준 daily range partition —
+    테스트 DB 는 오늘(2026-05-01) ~ +30일치만 partition 존재.
+    과거 날짜는 partition miss 로 IntegrityError 발생 → 동일 날짜(5/1) 내 시각 차이로 구분.
+    """
+    proj = await _seed_project(async_session)
+    cutoff = datetime(2026, 5, 1, 10, 0)
+    old_e = _make_log_event(
+        proj, fingerprint="fp-old",
+        received_at=datetime(2026, 5, 1, 8, 0),   # 오늘 08:00 — cutoff 이전
+    )
+    new_e = _make_log_event(
+        proj, fingerprint="fp-new",
+        received_at=datetime(2026, 5, 1, 11, 0),  # 오늘 11:00 — cutoff 이후
+    )
+    async_session.add_all([old_e, new_e])
+    await async_session.commit()
+
+    rows, total = await log_query_service.list_logs(
+        async_session, project_id=proj.id, since=cutoff,
+    )
+    assert total == 1
+    assert rows[0].fingerprint == "fp-new"
+
+
+async def test_list_logs_q_full_text_filters_to_warning_and_above(
+    async_session: AsyncSession,
+):
+    """q 풀텍스트 — level >= WARNING 자동 강제 + ILIKE."""
+    proj = await _seed_project(async_session)
+
+    # WARNING + matching message
+    e1 = _make_log_event(proj, fingerprint="fp-1")
+    e1.level = LogLevel.WARNING
+    e1.message = "this is a special_marker thing"
+
+    # ERROR + matching message
+    e2 = _make_log_event(proj, fingerprint="fp-2")
+    e2.level = LogLevel.ERROR
+    e2.message = "another special_marker here"
+
+    # INFO + matching message — should be excluded (level < WARNING)
+    e3 = _make_log_event(proj, fingerprint="fp-3")
+    e3.level = LogLevel.INFO
+    e3.message = "info with special_marker"
+
+    # WARNING + non-matching — should be excluded (no q match)
+    e4 = _make_log_event(proj, fingerprint="fp-4")
+    e4.level = LogLevel.WARNING
+    e4.message = "completely different"
+
+    async_session.add_all([e1, e2, e3, e4])
+    await async_session.commit()
+
+    rows, total = await log_query_service.list_logs(
+        async_session, project_id=proj.id, q="special_marker",
+    )
+    assert total == 2
+    msgs = {r.message for r in rows}
+    assert msgs == {
+        "this is a special_marker thing",
+        "another special_marker here",
+    }

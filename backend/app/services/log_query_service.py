@@ -194,3 +194,48 @@ async def get_group_detail(
             "previous_good_sha": previous_good_sha,
         },
     }
+
+
+async def list_logs(
+    db: AsyncSession,
+    *,
+    project_id: UUID,
+    level: LogLevel | None = None,
+    since: datetime | None = None,
+    q: str | None = None,
+    offset: int = 0,
+    limit: int = 100,
+) -> tuple[list[LogEvent], int]:
+    """LogEvent 조회. level/since/q 필터, received_at desc.
+
+    q: pg_trgm ILIKE — Phase 1 alembic 의 idx_log_message_trgm partial (level >= WARNING) 활용.
+    q 지정 시 자동 level >= WARNING 강제 (인덱스 partial WHERE 매칭).
+    """
+    base = select(LogEvent).where(LogEvent.project_id == project_id)
+    count_base = select(func.count()).select_from(LogEvent).where(
+        LogEvent.project_id == project_id
+    )
+
+    if q:
+        # pg_trgm 인덱스 활용 — level >= WARNING 자동 강제
+        warning_or_higher = LogEvent.level.in_(
+            [LogLevel.WARNING, LogLevel.ERROR, LogLevel.CRITICAL]
+        )
+        base = base.where(warning_or_higher).where(LogEvent.message.ilike(f"%{q}%"))
+        count_base = count_base.where(warning_or_higher).where(
+            LogEvent.message.ilike(f"%{q}%")
+        )
+    elif level is not None:
+        # q 가 없을 때만 level 단일 매칭 적용. q + level 동시 시 q 우선 (단순화)
+        base = base.where(LogEvent.level == level)
+        count_base = count_base.where(LogEvent.level == level)
+
+    if since is not None:
+        base = base.where(LogEvent.received_at >= since)
+        count_base = count_base.where(LogEvent.received_at >= since)
+
+    base = base.order_by(LogEvent.received_at.desc()).offset(offset).limit(limit)
+
+    rows = (await db.execute(base)).scalars().all()
+    total = (await db.execute(count_base)).scalar_one()
+    return list(rows), total
