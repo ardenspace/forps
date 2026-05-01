@@ -30,5 +30,8 @@ class Settings(BaseSettings):
     # Phase 5a — webhook callback URL (GitHub 가 호출할 외부 URL, e.g. Cloudflare Tunnel)
     forps_public_url: str = "http://localhost:8000"
 
+    # Phase 3 — fingerprint 정규화: 절대경로→상대경로 strip 시 prefix
+    app_project_root: str = "backend/"
+
 
 settings = Settings()
