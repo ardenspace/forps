@@ -963,3 +963,128 @@ async def test_concurrent_process_event_only_runs_once(
         f"expected fetch to be called once but was called {counter['n']} times — "
         "FOR UPDATE re-read 가 process_event entry 에 적용되지 않음"
     )
+
+
+# ---------------------------------------------------------------------------
+# B2: Discord sync-failure 알림 — process_event except 분기
+# ---------------------------------------------------------------------------
+
+
+async def test_discord_alert_called_on_failure_with_webhook_url(
+    async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+):
+    """failure path + Project.discord_webhook_url set → discord_service.send_webhook 1회 호출."""
+    proj = await _seed_project(async_session)
+    proj.discord_webhook_url = "https://discord.com/api/webhooks/1/abc"
+    await async_session.commit()
+    await async_session.refresh(proj)
+
+    head = "f" * 40
+    event = await _seed_event(
+        async_session, proj, head_sha=head,
+        commits=[{"id": head, "modified": ["PLAN.md"], "added": []}],
+    )
+
+    async def boom_fetch(repo, pat, sha, path):
+        raise RuntimeError("github 502")
+
+    async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
+        return ["PLAN.md"]
+
+    sent: list[tuple[str, str]] = []
+
+    async def fake_send(content, webhook_url):
+        sent.append((content, webhook_url))
+
+    import app.services.discord_service as discord_mod
+    monkeypatch.setattr(discord_mod, "send_webhook", fake_send)
+
+    await process_event(
+        async_session, event, fetch_file=boom_fetch, fetch_compare=fake_compare,
+    )
+
+    # process_event 가 commit 하면 proj/event expire — 속성 접근 전 refresh 필요.
+    await async_session.refresh(proj)
+    await async_session.refresh(event)
+
+    assert len(sent) == 1
+    content, url = sent[0]
+    assert url == "https://discord.com/api/webhooks/1/abc"
+    assert "forps sync 실패" in content
+    assert proj.name in content
+    assert event.branch in content
+    assert head[:7] in content
+    assert "RuntimeError" in content
+
+
+async def test_discord_alert_skipped_when_webhook_url_missing(
+    async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+):
+    """failure path + Project.discord_webhook_url IS NULL → send_webhook 호출 안 함."""
+    proj = await _seed_project(async_session)
+    # discord_webhook_url 미설정 (default None)
+    head = "e" * 40
+    event = await _seed_event(
+        async_session, proj, head_sha=head,
+        commits=[{"id": head, "modified": ["PLAN.md"], "added": []}],
+    )
+
+    async def boom_fetch(repo, pat, sha, path):
+        raise RuntimeError("github 502")
+
+    async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
+        return ["PLAN.md"]
+
+    sent: list = []
+
+    async def fake_send(content, webhook_url):
+        sent.append((content, webhook_url))
+
+    import app.services.discord_service as discord_mod
+    monkeypatch.setattr(discord_mod, "send_webhook", fake_send)
+
+    await process_event(
+        async_session, event, fetch_file=boom_fetch, fetch_compare=fake_compare,
+    )
+
+    assert len(sent) == 0
+    await async_session.refresh(event)
+    assert event.error is not None  # failure recorded
+
+
+async def test_discord_alert_not_called_on_success_path(
+    async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+):
+    """success path + discord_webhook_url set → send_webhook 호출 안 함 (실패 시에만 알림)."""
+    proj = await _seed_project(async_session)
+    proj.discord_webhook_url = "https://discord.com/api/webhooks/1/abc"
+    await async_session.commit()
+
+    head = "d" * 40
+    event = await _seed_event(
+        async_session, proj, head_sha=head,
+        commits=[{"id": head, "modified": ["PLAN.md"], "added": []}],
+    )
+
+    async def fake_fetch_file(repo, pat, sha, path):
+        return "## 태스크\n\n- [ ] [task-001] T — @alice"
+
+    async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
+        return ["PLAN.md"]
+
+    sent: list = []
+
+    async def fake_send(content, webhook_url):
+        sent.append((content, webhook_url))
+
+    import app.services.discord_service as discord_mod
+    monkeypatch.setattr(discord_mod, "send_webhook", fake_send)
+
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=fake_compare,
+    )
+
+    assert len(sent) == 0
+    await async_session.refresh(event)
+    assert event.error is None  # success

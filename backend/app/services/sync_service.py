@@ -57,6 +57,11 @@ async def process_event(
         return
 
     event_id = event.id  # 세션 poison 후 expire 대비
+    # B2: rollback 후 project/event 가 expire — Discord 알림에 필요한 값 미리 캡처.
+    discord_webhook_url = project.discord_webhook_url
+    project_name = project.name
+    event_branch = event.branch
+    event_head_sha = event.head_commit_sha
 
     try:
         await _process_inner(db, event, project, fetch_file=fetch_file, fetch_compare=fetch_compare)
@@ -82,6 +87,21 @@ async def process_event(
         event.error = error_msg
         await db.commit()
         db.sync_session.autoflush = True
+        # B2: Discord sync-failure 알림 (minimal — cooldown 없음, 기존 webhook URL 재사용).
+        # 알림 실패는 메인 처리에 영향 없게 swallow. event 당 except 1회 = 자연 1알림.
+        # discord_webhook_url 은 rollback 전 미리 캡처한 값 사용 (rollback 후 project expire).
+        if discord_webhook_url:
+            from app.services import discord_service
+            try:
+                content = (
+                    f"⚠️ **forps sync 실패** — {project_name}\n"
+                    f"branch: `{event_branch}`\n"
+                    f"commit: `{event_head_sha[:7]}`\n"
+                    f"error: ```{error_msg[:500]}```"
+                )
+                await discord_service.send_webhook(content, discord_webhook_url)
+            except Exception:
+                logger.exception("Failed to send Discord alert for event %s", event_id)
 
 
 async def _process_inner(
