@@ -1,5 +1,54 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-05-01 (Error-log Phase 3 — Fingerprint + ErrorGroup + Reaper + B-lite Alert)
+
+- [x] **Error-log Phase 3** — 브랜치 `feature/error-log-phase3-fingerprint`
+  - [x] **`fingerprint_service`** (`58f0219`): 결정적 SHA1 (정규화 6 규칙 — APP_PROJECT_ROOT env var + 휴리스틱 / line 제거 / 메모리 주소 마스킹 / 함수명 유지 / framework 스킵 / 입력 포맷). Fallback: stack_frames None 또는 모두 framework. config 에 `app_project_root: str = "backend/"` 추가.
+  - [x] **`error_group_service`** (`9845336`): ErrorGroup UPSERT + 자동 status 전이 (신규→OPEN, RESOLVED→REGRESSED). race-free — `with_for_update` (B1 패턴) + UNIQUE conflict SAVEPOINT (Phase 2 record_push_event 패턴). 동시 UPDATE 직렬화 deterministic 4회 반복 검증.
+  - [x] **`log_alert_service.notify_new_error`** (`bc1fb0f`, B-lite scope): 신규 fingerprint 1회 Discord 알림. notification_dispatcher 통과 (Phase 6 disable 정책 자동). cooldown — last_alerted_new_at IS NULL 1차 게이트 + race 방지 2차 체크.
+  - [x] **`fingerprint_processor`** (`1e5c157`): composition (fingerprint → group → fingerprinted_at + commit → 신규면 alert). exception_class None → "UnknownError".
+  - [x] **Ingest endpoint BackgroundTask 통합** (`9523d48`): ingest_batch 시그니처에 accepted_event_ids 추가. endpoint 가 ERROR↑ 분류 SELECT + add_task. _process_log_event_in_new_session helper (자체 session + 멱등 — fingerprinted_at 체크). Phase 4 fresh-session 패턴.
+  - [x] **`log_fingerprint_reaper` + lifespan hook** (`e3570ab`): 부팅 시 1회, chunked 100/batch, idx_log_unfingerprinted partial index 사용 (Phase 1 alembic). push_event_reaper 패턴.
+  - [x] **마이그레이션 신규 없음** — Phase 1 alembic 이 모든 모델 + 인덱스 (`idx_log_unfingerprinted` partial 포함) 이미 포함.
+  - [x] **deviation 1**: Task 5 endpoint test 가 `_process_log_event_in_new_session` helper 자체를 patch (spec 의 `fingerprint_processor.process` patch 대신) — helper 가 AsyncSessionLocal 열기 전 차단해야 test container 환경에서 동작. 더 깔끔한 isolation point.
+  - [x] **deviation 2**: Task 6 reaper test 의 seed 가 fixed `exception_message` 사용 (varying message 대신) — fingerprint fallback 의 결정성 (`SHA1(class|msg_first_line)`) 에 맞춤 (같은 message → 같은 fingerprint → 1 group).
+  - [x] **검증**: backend **256 tests pass** (230 baseline + 26 신규: 9 fingerprint + 6 group + 3 alert + 4 processor + 1 endpoint + 3 reaper). race fix 4회 deterministic. e2e 사용자 직접 검증 필요 (app-chak logger.error → Discord 알림 도착).
+
+### 마지막 커밋
+
+- forps: `<sha> docs(handoff+plan): Error-log Phase 3 완료 + Phase 4 다음 할 일`
+- 브랜치 base: `90cce78` (main, Error-log Phase 2a PR #16 머지 직후)
+
+### 다음 (Error-log Phase 4 — 조회 API + Git 컨텍스트 join)
+
+본 phase 가 ErrorGroup 데이터 채워줌 — Phase 4 가 사용자 노출 (조회):
+- `log_query_service` + `GET /errors`, `GET /errors/{group_id}` (Handoff/Task/GitPushEvent join)
+- 직전 정상 SHA 찾기 알고리즘 (해당 fingerprint 가 *없는* 가장 최근 SHA, 같은 environment)
+- 풀텍스트 검색 endpoint (pg_trgm, message gin_trgm_ops 인덱스 Phase 1 에 이미)
+- 핵심 가치 전달 — UI 없이 API 만으로도 curl 검증 가능
+
+또는 Phase 5 (UI) — Phase 4 + 5 같이 묶음 가능.
+
+### 블로커
+
+없음
+
+### 메모 (2026-05-01 Error-log Phase 3 추가)
+
+- **race-free UPSERT 패턴 (조합)**: `with_for_update()` 가 같은 group 동시 UPDATE 직렬화, 신규 INSERT race 는 `begin_nested() + IntegrityError catch + SELECT fallback` (Phase 2 record_push_event 패턴 재사용). 두 mechanism 가 다른 case 커버 — 같이 쓰면 race-free. concurrent test 4회 deterministic 검증.
+- **commit 후 알림 패턴 (Phase 6 학습 적용)**: fingerprint_processor 가 db.commit() 후 notify_new_error 호출. DB 일관 상태에서 발송. alert_service 자체도 commit 마킹 — `last_alerted_new_at = now`.
+- **BackgroundTask + reaper 멱등 패턴**: 양쪽에서 `event.fingerprinted_at IS NOT NULL` 체크. 둘 중 하나만 처리. reaper 의 chunked 100/batch + idx partial index 가 large backlog 안전.
+- **fresh session per event (Phase 4 학습)**: reaper 와 BackgroundTask 모두 같은 패턴 — 단일 event poison 이 다음 event 처리에 영향 없음. reaper 는 lookup_db (per-batch) + inner_db (per-event) 분리.
+- **fingerprint 정규화 결정성**: line 제거 + 메모리 주소 마스킹 + framework 스킵 — 같은 버그를 다른 group 으로 분리 안 하고, 다른 버그를 같은 group 으로 합치지 않음. spec §4.1 의 균형점.
+- **Fallback 의도**: stack_frames None 또는 모두 framework 라도 ErrorGroup 만들어짐 — fingerprint 약하지만 사용자 가시화 (사고 가능). spec §7.
+- **B-lite alert scope**: 신규 fingerprint 1종만. spike (메모리 카운터 + 30분 cooldown) / regression (자동 transition 알림) 은 Phase 6 본편. error_group_service.upsert 가 `transitioned_to_regression` 신호 이미 return — Phase 6 alert_service 가 사용 예정.
+- **deviation 1 (Task 5 endpoint test)**: `_process_log_event_in_new_session` helper 자체를 patch — helper 가 AsyncSessionLocal 열기 전 차단. spec 의 inner function patch 보다 cleaner isolation.
+- **deviation 2 (Task 6 reaper test seed)**: fixed exception_message 사용 — fingerprint fallback (`SHA1(class|msg_first_line)`) 의 결정성에 맞춤. varying message 면 다른 group 분리됨.
+- **마이그레이션 신규 없음 학습 (Phase 6 / Phase 2a 와 같은 패턴)**: Phase 1 통합 alembic 이 모든 모델/인덱스 포함. error-log 의 본 phase 도 schema 변경 0 — 순수 service/endpoint 레이어.
+- **next 가능 옵션**: Phase 4 (조회 + git join) 또는 Phase 4+5 (조회 + UI) 묶음. Phase 6 알림 본편 (spike/regression) 은 사용자 dogfooding 후 결정.
+
+---
+
 ## 2026-05-01 (Error-log Phase 2a — Ingest endpoint + Token API)
 
 - [x] **Error-log Phase 2a — Ingest endpoint + Token API** — 브랜치 `feature/error-log-phase2-ingest`
