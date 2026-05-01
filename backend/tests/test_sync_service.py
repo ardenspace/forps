@@ -1052,10 +1052,14 @@ async def test_discord_alert_skipped_when_webhook_url_missing(
     assert event.error is not None  # failure recorded
 
 
-async def test_discord_alert_not_called_on_success_path(
+async def test_discord_alert_not_called_on_success_path_without_relevant_files(
     async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
 ):
-    """success path + discord_webhook_url set → send_webhook 호출 안 함 (실패 시에만 알림)."""
+    """success path + PLAN/handoff 와 무관한 파일만 변경 → send_webhook 호출 안 함.
+
+    Phase 6: success path 도 push summary 알림을 보낼 수 있게 됨.
+    그러나 PLAN/handoff 둘 다 변경 안 됐고 actionable change 도 없으면 무알림 (no-op push noise 방지).
+    """
     proj = await _seed_project(async_session)
     proj.discord_webhook_url = "https://discord.com/api/webhooks/1/abc"
     await async_session.commit()
@@ -1063,14 +1067,14 @@ async def test_discord_alert_not_called_on_success_path(
     head = "d" * 40
     event = await _seed_event(
         async_session, proj, head_sha=head,
-        commits=[{"id": head, "modified": ["PLAN.md"], "added": []}],
+        commits=[{"id": head, "modified": ["README.md"], "added": []}],
     )
 
-    async def fake_fetch_file(repo, pat, sha, path):
-        return "## 태스크\n\n- [ ] [task-001] T — @alice"
+    async def fake_fetch_file(repo, pat, sha, path):  # noqa: ARG001
+        return None
 
     async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
-        return ["PLAN.md"]
+        return ["README.md"]
 
     sent: list = []
 
@@ -1088,3 +1092,170 @@ async def test_discord_alert_not_called_on_success_path(
     assert len(sent) == 0
     await async_session.refresh(event)
     assert event.error is None  # success
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: push summary 알림
+# ---------------------------------------------------------------------------
+
+
+async def test_push_summary_includes_all_categories(
+    async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+):
+    """체크 + 롤백 + archived 섞인 push → dispatcher 호출, content 에 모든 카테고리 줄 포함."""
+    proj = await _seed_project(async_session)
+    proj.discord_webhook_url = "https://discord.com/api/webhooks/1/abc"
+    await async_session.commit()
+    await async_session.refresh(proj)
+
+    # 기존 SYNCED tasks 시드 — 체크/롤백/archived 의 before-state
+    from app.models.task import Task, TaskSource, TaskStatus
+    t_check = Task(
+        project_id=proj.id, title="구글 로그인",
+        source=TaskSource.SYNCED_FROM_PLAN, external_id="task-001",
+        status=TaskStatus.TODO,
+    )
+    t_unchk = Task(
+        project_id=proj.id, title="결제 모듈",
+        source=TaskSource.SYNCED_FROM_PLAN, external_id="task-007",
+        status=TaskStatus.DONE,
+    )
+    t_arch = Task(
+        project_id=proj.id, title="구버전 마이그레이션",
+        source=TaskSource.SYNCED_FROM_PLAN, external_id="task-009",
+        status=TaskStatus.TODO,
+    )
+    async_session.add_all([t_check, t_unchk, t_arch])
+    await async_session.commit()
+
+    head = "1" * 40
+    event = await _seed_event(
+        async_session, proj, head_sha=head,
+        commits=[{"id": head, "modified": ["PLAN.md", "handoffs/main.md"], "added": []}],
+    )
+
+    plan_text = (
+        "## 태스크\n\n"
+        "- [x] [task-001] 구글 로그인 — @alice\n"
+        "- [ ] [task-007] 결제 모듈 — @bob\n"
+        # task-009 PLAN 에서 사라짐 → archived
+    )
+    handoff_text = (
+        "# Handoff: main — @alice\n\n"
+        "## 2026-05-01\n\n"
+        "- [x] [task-001]\n"
+    )
+
+    async def fake_fetch(repo, pat, sha, path):
+        if path == "PLAN.md":
+            return plan_text
+        if path == "handoffs/main.md":
+            return handoff_text
+        return None
+
+    async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
+        return ["PLAN.md", "handoffs/main.md"]
+
+    sent: list[tuple[str, str]] = []
+    async def fake_send(content, url):
+        sent.append((content, url))
+
+    import app.services.discord_service as discord_mod
+    monkeypatch.setattr(discord_mod, "send_webhook", fake_send)
+
+    await process_event(
+        async_session, event, fetch_file=fake_fetch, fetch_compare=fake_compare,
+    )
+
+    assert len(sent) == 1
+    content, _ = sent[0]
+    assert "📦" in content
+    assert event.pusher in content
+    assert event.branch in content
+    assert head[:7] in content
+    assert "✅ 완료" in content
+    assert "[task-001] 구글 로그인" in content
+    assert "↩️ 되돌림" in content
+    assert "[task-007] 결제 모듈" in content
+    assert "🗑️ PLAN 에서 제거" in content
+    assert "[task-009] 구버전 마이그레이션" in content
+    # handoff 정상 → 누락 줄 없음
+    assert "handoff 누락" not in content
+
+
+async def test_push_summary_includes_handoff_missing_line(
+    async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+):
+    """PLAN 변경 + handoff 부재 → content 에 ⚠️ handoff 누락 줄."""
+    proj = await _seed_project(async_session)
+    proj.discord_webhook_url = "https://discord.com/api/webhooks/1/abc"
+    await async_session.commit()
+    await async_session.refresh(proj)
+
+    head = "2" * 40
+    event = await _seed_event(
+        async_session, proj, head_sha=head,
+        commits=[{"id": head, "modified": ["PLAN.md"], "added": []}],
+    )
+
+    plan_text = "## 태스크\n\n- [ ] [task-001] 새 task — @alice\n"
+    # handoff 파일 fetch 가 None — 부재로 시뮬레이션
+
+    async def fake_fetch(repo, pat, sha, path):
+        if path == "PLAN.md":
+            return plan_text
+        return None  # handoff 부재
+
+    async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
+        return ["PLAN.md", "handoffs/main.md"]  # changed_files 에는 있지만 fetch 가 None
+
+    sent: list = []
+    async def fake_send(content, url):
+        sent.append((content, url))
+
+    import app.services.discord_service as discord_mod
+    monkeypatch.setattr(discord_mod, "send_webhook", fake_send)
+
+    await process_event(
+        async_session, event, fetch_file=fake_fetch, fetch_compare=fake_compare,
+    )
+
+    assert len(sent) == 1
+    content, _ = sent[0]
+    assert "⚠️ handoff 누락" in content
+    assert "handoffs/main.md" in content
+
+
+async def test_push_summary_skipped_when_no_changes(
+    async_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+):
+    """PLAN/handoff 변경 없는 push → dispatcher 호출 안 함 (no-op push 노이즈 방지)."""
+    proj = await _seed_project(async_session)
+    proj.discord_webhook_url = "https://discord.com/api/webhooks/1/abc"
+    await async_session.commit()
+    await async_session.refresh(proj)
+
+    head = "3" * 40
+    event = await _seed_event(
+        async_session, proj, head_sha=head,
+        commits=[{"id": head, "modified": ["README.md"], "added": []}],  # PLAN/handoff 무관 파일
+    )
+
+    async def fake_fetch(repo, pat, sha, path):  # noqa: ARG001
+        return None
+
+    async def fake_compare(repo, pat, base, head_sha):  # noqa: ARG001
+        return ["README.md"]
+
+    sent: list = []
+    async def fake_send(content, url):
+        sent.append((content, url))
+
+    import app.services.discord_service as discord_mod
+    monkeypatch.setattr(discord_mod, "send_webhook", fake_send)
+
+    await process_event(
+        async_session, event, fetch_file=fake_fetch, fetch_compare=fake_compare,
+    )
+
+    assert sent == []
