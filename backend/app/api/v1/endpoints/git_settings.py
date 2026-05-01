@@ -42,6 +42,27 @@ def _normalize_url(url: str) -> str:
     return url.rstrip("/").lower()
 
 
+def _build_git_settings_response(project) -> GitSettingsResponse:
+    """GitSettings 응답 builder — GET/PATCH/discord-reset 공통 (DRY)."""
+    return GitSettingsResponse(
+        git_repo_url=project.git_repo_url,
+        git_default_branch=project.git_default_branch,
+        plan_path=project.plan_path,
+        handoff_dir=project.handoff_dir,
+        last_synced_commit_sha=project.last_synced_commit_sha,
+        has_webhook_secret=project.webhook_secret_encrypted is not None,
+        has_github_pat=project.github_pat_encrypted is not None,
+        public_webhook_url=_public_webhook_url(),
+        # Phase 6
+        discord_enabled=(
+            project.discord_webhook_url is not None
+            and project.discord_disabled_at is None
+        ),
+        discord_disabled_at=project.discord_disabled_at,
+        discord_consecutive_failures=project.discord_consecutive_failures,
+    )
+
+
 @router.get("/{project_id}/git-settings", response_model=GitSettingsResponse)
 async def get_git_settings(
     project_id: UUID,
@@ -56,16 +77,7 @@ async def get_git_settings(
     if role is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return GitSettingsResponse(
-        git_repo_url=project.git_repo_url,
-        git_default_branch=project.git_default_branch,
-        plan_path=project.plan_path,
-        handoff_dir=project.handoff_dir,
-        last_synced_commit_sha=project.last_synced_commit_sha,
-        has_webhook_secret=project.webhook_secret_encrypted is not None,
-        has_github_pat=project.github_pat_encrypted is not None,
-        public_webhook_url=_public_webhook_url(),
-    )
+    return _build_git_settings_response(project)
 
 
 @router.patch("/{project_id}/git-settings", response_model=GitSettingsResponse)
@@ -95,16 +107,36 @@ async def patch_git_settings(
     await db.commit()
     await db.refresh(project)
 
-    return GitSettingsResponse(
-        git_repo_url=project.git_repo_url,
-        git_default_branch=project.git_default_branch,
-        plan_path=project.plan_path,
-        handoff_dir=project.handoff_dir,
-        last_synced_commit_sha=project.last_synced_commit_sha,
-        has_webhook_secret=project.webhook_secret_encrypted is not None,
-        has_github_pat=project.github_pat_encrypted is not None,
-        public_webhook_url=_public_webhook_url(),
-    )
+    return _build_git_settings_response(project)
+
+
+@router.post(
+    "/{project_id}/git-settings/discord-reset",
+    response_model=GitSettingsResponse,
+)
+async def reset_discord(
+    project_id: UUID,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Discord 알림 비활성화 해제 — counter 0 + disabled_at NULL.
+    설계서: 2026-05-01-phase-6-discord-notifications-design.md §3.5
+    """
+    project = await project_service.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    role = await get_effective_role(db, user.id, project_id)
+    if role is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not can_manage(role):
+        raise HTTPException(status_code=403, detail="Owner only")
+
+    project.discord_consecutive_failures = 0
+    project.discord_disabled_at = None
+    await db.commit()
+    await db.refresh(project)
+
+    return _build_git_settings_response(project)
 
 
 @router.post(

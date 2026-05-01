@@ -123,6 +123,8 @@ export const api = {
       apiClient.get<GitEventSummary[]>(`/projects/${projectId}/git-events`, { params }),
     reprocessEvent: (projectId: string, eventId: string) =>
       apiClient.post<ReprocessResponse>(`/projects/${projectId}/git-events/${eventId}/reprocess`),
+    resetDiscord: (projectId: string) =>
+      apiClient.post<GitSettings>(`/projects/${projectId}/git-settings/discord-reset`),
   },
 
   tasks: {

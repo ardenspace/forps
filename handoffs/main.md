@@ -1,5 +1,48 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-05-01 (Phase 6 — Discord 알림 통합 본편)
+
+- [x] **Phase 6 — Discord 알림 통합 본편** — 브랜치 `feature/phase-6-discord-notifications`
+  - [x] **Project 모델 +2 컬럼** (`discord_consecutive_failures` / `discord_disabled_at`) — alembic 1건 (`7c6e0c9bb915_phase6_discord_counter`, server_default='0'). 기존 row 자동 활성 상태.
+  - [x] **`notification_dispatcher` 신규 서비스** — 모든 Discord 알림 1점 진입. URL NULL / disabled_at set → no-op. 성공 시 counter reset, 실패 시 +1 (3 도달 시 disabled_at = now). 알림 실패 silent.
+  - [x] **Push 알림 (success path)** — `_apply_plan` 가 `PlanChanges` dataclass return, `_apply_handoff` 가 bool return. `_process_inner` 가 (plan_changes, handoff_present, plan_changed) tuple return. `_format_push_summary` 가 4 카테고리 (체크/롤백/archived/handoff 누락) — 모든 카테고리 비고 + handoff 정상 → None return → 알림 안 함. 신규 INSERT 알림 안 함 (sprint 초 noise YAGNI). `handoff_path` 정확화 polish 적용 (custom handoff_dir / 슬래시 branch 케이스).
+  - [x] **B2 sync-failure 리팩토링** — `process_event` except 분기의 직접 `send_webhook` → dispatcher 경유. **B1 의 rollback ORM expire 함정 학습**: `db.refresh(project)` 1줄 추가 (capture 한 webhook URL 이 truthy 일 때만 refresh — 비용 회피).
+  - [x] **`POST /git-settings/discord-reset`** (OWNER 전용) — counter / disabled_at reset.
+  - [x] **`GitSettingsResponse` 3 필드** (`discord_enabled` / `discord_disabled_at` / `discord_consecutive_failures`). `_build_git_settings_response` 헬퍼로 GET/PATCH/discord-reset DRY.
+  - [x] **`project_service.update_project` 자동 reset** — `discord_webhook_url` 변경 감지 시 같은 트랜잭션에서 reset (DashboardPage 의 PATCH /projects 경로 자동 적용).
+  - [x] **Frontend `ProjectGitSettingsModal` Discord 섹션** — 상태 (활성/비활성화/미설정) + 비활성화 시각 + 재활성화 버튼. URL 입력은 DashboardPage 그대로 (UI 변경 없음).
+  - [x] **테스트 deviation**: B2 의 `test_discord_alert_not_called_on_success_path` 가 PLAN-only push 를 가정 → Phase 6 의 새 contract (PLAN-only = handoff_missing alert 발사) 와 충돌. 테스트 이름/입력 변경 (`test_discord_alert_not_called_on_success_path_without_relevant_files`, `README.md` only) 으로 원래 의도 (truly no-op push) 보존. 더 정확한 회귀.
+  - [x] **검증**: backend **198 tests pass** (184 baseline + 14 신규: 2 migration + 4 dispatcher + 3 push summary + 4 git_settings + 1 project_service). frontend `bun run build` clean, `bun run lint` 8 pre-existing only. **시각 검증 + e2e 사용자 직접** (PR 본문 체크리스트).
+
+### 마지막 커밋
+
+- forps: `<sha> docs(handoff+plan): Phase 6 완료 + Phase 7 (선택) 다음 할 일`
+- 브랜치 base: `29c7db7` (main, B2 PR #14 머지 직후)
+
+### 다음 (Phase 7 — Gemma 브리핑, 선택) 또는 error-log spec
+
+spec §11 의 마지막 phase. 진입 전 맥미니에서 Gemma 4 26B MoE 추론 시간 실측 필요 (30초 빈번 초과 시 비동기 응답 패턴). Phase 1~6 안정화 + 1주 무중단 검증 후 별개 trigger.
+
+또는: **error-log spec 진입** (`2026-04-26-error-log-design.md`). task-automation Phase 4 (sync_service) 안정화 1주 충족 — 진입 가능.
+
+### 블로커
+
+없음
+
+### 메모 (2026-05-01 Phase 6 추가)
+
+- **`PlanChanges` dataclass return 패턴**: `_apply_plan` 가 mutation 외에 변경 요약 dict 도 return — `process_event` 가 모아서 dispatcher 호출. mutable global state 안 씀, 함수 순수성 유지. 향후 알림 종류 추가 시 카테고리만 늘리면 됨.
+- **`_handoff_file_path` 정확화 (polish)**: 초기 구현이 `f"handoffs/{branch}.md"` hardcoded 였으나 custom `handoff_dir` 또는 슬래시 branch (예: `feature/foo` → `feature-foo.md`) 케이스 부정확. caller 가 `_handoff_file_path(project, branch)` 결과 전달하도록 변경. 회귀 테스트는 default 값 (handoffs/main.md) 그대로 → 통과 유지.
+- **B1 의 rollback ORM expire 함정 재발 회피**: success path 는 commit 직전까지 ORM 살아있어 dispatcher 가 직접 project 접근 안전. except path 는 rollback 이 expire 시키므로 dispatcher 호출 직전 `db.refresh(project)` 필수. capture 된 webhook URL 은 1차 게이트로 사용 (truthy 일 때만 refresh — 비용 회피).
+- **신규 INSERT 알림 미도입 결정**: sprint 초 PLAN 작성 시 노이즈 폭발. 사용자 호소 시 후속 옵션 컬럼 추가.
+- **알림 종류별 on/off 미도입**: `discord_webhook_url` NULL 또는 `discord_disabled_at` set 만으로 사용자 제어. 종류별 필터는 사용자 호소 시 후속.
+- **DashboardPage 의 URL 입력 + GitSettings 의 상태 표시 분리**: 기존 UX 그대로 (URL 변경 코스트 ↓), 백엔드 `update_project` 가 URL 변경 감지 시 자동 reset 으로 일관 보장. URL 입력 모달 안으로 이동은 UX 결정 후속.
+- **alembic autogenerate 함정 학습**: live DB 와 마이그레이션 history 가 drift 면 autogenerate 가 노이즈 (예: log_events partition drops, index 변동) 추가. 본 phase 의 Task 1 에서 implementer 가 autogenerate 결과를 수동으로 정리해 add_column 2건만 남김. 향후 마이그레이션도 같은 패턴 — autogen 결과를 항상 검토.
+- **B2 test deviation 처리**: 새 contract (Phase 6 의 success path 알림) 가 기존 테스트의 가정과 충돌하면 테스트 이름/입력을 새 의도로 갱신 (band-aid 아님). 본 phase 에서 `test_discord_alert_not_called_on_success_path` → `..._without_relevant_files` (PLAN-only → README-only) 로 갱신. spec reviewer 가 합리적 deviation 으로 승인.
+- **next 가능 옵션**: Phase 7 (Gemma 브리핑) 또는 error-log spec. Phase 4 안정화 1주 충족 — error-log 진입 trigger 도 가능.
+
+---
+
 ## 2026-05-01 (Phase 5 follow-up B2)
 
 - [x] **B2 — UI Closure + Discord sync-failure 알림** — 브랜치 `feature/phase-5-followup-b2-ui`
