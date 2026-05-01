@@ -3,6 +3,7 @@ import {
   useGitSettings,
   useRegisterWebhook,
   useUpdateGitSettings,
+  useResetDiscord,
 } from '@/hooks/useGithubSettings';
 import type { GitSettings } from '@/types';
 
@@ -22,6 +23,7 @@ interface GitSettingsFormProps {
 function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps) {
   const updateMutation = useUpdateGitSettings(projectId);
   const registerMutation = useRegisterWebhook(projectId);
+  const resetDiscord = useResetDiscord(projectId);
 
   const [repoUrl, setRepoUrl] = useState(settings.git_repo_url ?? '');
   const [planPath, setPlanPath] = useState(settings.plan_path);
@@ -154,6 +156,45 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
           <p className="text-[11px] text-muted-foreground mt-1">
             저장소 URL과 PAT 를 먼저 저장해야 합니다.
           </p>
+        )}
+      </div>
+
+      {/* Phase 6: Discord 알림 상태 + 재활성화 */}
+      <div className="border-t-2 border-black pt-4 mt-4">
+        <h3 className="font-black text-sm mb-2">Discord 알림</h3>
+        <div className="text-xs">
+          상태: {settings.discord_enabled ? (
+            <span className="text-green-700 font-medium">✅ 활성</span>
+          ) : settings.discord_disabled_at ? (
+            <span className="text-red-700 font-medium">
+              ⚠️ 비활성화 ({settings.discord_consecutive_failures}회 연속 실패)
+            </span>
+          ) : (
+            <span className="text-muted-foreground">⚪ 미설정 — 프로젝트 설정에서 webhook URL 입력</span>
+          )}
+        </div>
+        {settings.discord_disabled_at && (
+          <div className="mt-2 text-[11px] text-muted-foreground">
+            비활성화 시각: {new Date(settings.discord_disabled_at).toLocaleString()}
+          </div>
+        )}
+        {settings.discord_disabled_at && (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await resetDiscord.mutateAsync();
+                alert('Discord 알림 재활성화 완료');
+              } catch (err: unknown) {
+                const error = err as { response?: { data?: { detail?: string } }; message?: string };
+                alert(error.response?.data?.detail || error.message || '재활성화 실패');
+              }
+            }}
+            disabled={resetDiscord.isPending}
+            className="mt-2 px-3 py-1.5 text-xs font-medium border-2 border-black bg-white hover:bg-yellow-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {resetDiscord.isPending ? '재활성화 중...' : '재활성화'}
+          </button>
         )}
       </div>
 
