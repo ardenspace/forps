@@ -1,5 +1,44 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-05-01 (Phase 5 follow-up B2)
+
+- [x] **B2 — UI Closure + Discord sync-failure 알림** — 브랜치 `feature/phase-5-followup-b2-ui`
+  - [x] **TaskCard ⚠️ 기록 빠짐 배지** (`0eb412d` backend + `7069b4d` frontend): backend `TaskResponse.handoff_missing` 필드 + `task_service._annotate_handoff_missing` (단일 query 로 N+1 회피, cross-project 안전 — week tasks 도 처리). 조건: SYNCED + last_commit_sha set + handoff 없음 + not archived. frontend 1줄 조건부 노란 배지.
+  - [x] **GitEventListModal + reprocess 호출 site** (`cd97275` backend + `658c3d8`/`64f5624` frontend): backend 신규 endpoint `GET /git-events?failed_only=true`, frontend HandoffHistoryModal 패턴 매칭 (custom modal — shadcn Dialog 아님), 행마다 [재처리] 버튼. B1 의 `useReprocessEvent` hook 이 이번에 wired up. onError 분기: 409/400/기타 alert.
+  - [x] **ProjectItem count badge + 메뉴 항목** (`64f5624`): trigger `···` 우상단 빨간 점, 메뉴 항목 "⚠️ Sync 실패 (N)" — 0건 시 둘 다 숨김. OWNER 만 fetch.
+  - [x] **Discord sync-failure 알림 (minimal)** (`cfb14b9`): `process_event` except 분기 끝에서 fire-and-forget Discord 알림. `Project.discord_webhook_url` set 인 경우만, 알림 실패 silent. cooldown 없음 — Phase 6 의 cooldown + 3 템플릿은 본편 phase. **rollback 후 expire 회피** 위해 webhook URL / project name / branch / head SHA 를 try block 전에 capture.
+  - [x] **검증**: backend **184 tests pass** (175 B1 baseline + 9 신규: handoff_missing 3 + git-events endpoint 3 + Discord alert 3). frontend `bun run build` clean, `bun run lint` 8 pre-existing (out of scope). **시각 검증은 사용자 dev server 직접** (PR 본문 체크리스트).
+
+### 마지막 커밋
+
+- forps: `<sha> docs(handoff+plan): Phase 5 follow-up B2 완료 + Phase 6 다음 할 일`
+- 브랜치 base: `cd53696` (main, B1 PR #13 머지 직후)
+
+### 다음 (Phase 6 — Discord 알림 통합 본편)
+
+- [ ] **`discord_service` 확장 — 3 템플릿**:
+  - 체크 변경 알림 (PLAN 의 `[ ]` → `[x]` 변화 사용자별 요약)
+  - handoff 누락 경고 (일정 시간 경과 후 handoff 없으면 알림)
+  - 롤백 알림 (PLAN 에서 task `[x]` → `[ ]` 회귀)
+- [ ] **`sync_service` 가 알림 트리거** (DB 변경 후 fire-and-forget BackgroundTask)
+- [ ] **cooldown 정책** (spec §8 — 3회 연속 실패 시 disable, burst 차단)
+- [ ] **알림 종류별 on/off** (선택 — Project 설정 1 컬럼)
+
+### 블로커
+
+없음
+
+### 메모 (2026-05-01 B2 추가)
+
+- **handoff_missing annotate 패턴 결정**: SQLAlchemy `column_property` 또는 `select` 의 EXISTS 라벨 대신 — list[Task] fetch 후 별도 query 1건으로 `(project_id, commit_sha) in handoffs` 매칭. 결과를 비-mapped Python 인스턴스 attribute (`task.handoff_missing = bool`) 로 set. Pydantic `from_attributes=True` 가 mapped 여부 무관하게 attribute 읽음. cross-project (week tasks) 도 안전 — `Handoff.project_id.in_(...)` + `Handoff.commit_sha.in_(...)` 후 `(project_id, commit_sha) in existing_pairs` 로 정확 매칭 (Cartesian over-fetch 안전).
+- **GitEventListModal 패턴 결정**: codebase 가 shadcn `Dialog` 가 아닌 custom modal (HandoffHistoryModal — 검정 테두리 + 빨강 그림자) 컨벤션. 이번에도 같은 스타일 매칭. 토스트 system 도 미도입 → `alert()` 로 대체. 향후 toast 도입 시 일괄 교체.
+- **Discord 알림 expired-object 함정**: `process_event` except 분기는 `db.rollback()` 을 호출 — `expire_on_commit=False` 가 commit 만 보호하고 rollback 은 그대로 expire 시킴. 알림 송신 시 `project.discord_webhook_url` / `project.name` / `event.branch` / `event.head_commit_sha` 접근하면 `MissingGreenlet` 발생 (async lazy load). 해결: 4 값을 try block 진입 전 (project 로드 직후) 에 캡처해두고 except 분기에서 캡처본 사용. 향후 sync_service 에 다른 비-async 외부 호출 추가될 때 같은 패턴 주의.
+- **count badge UX 결정**: dropdown 외부 (trigger ··· 우상단 빨간 점) + dropdown 내부 (메뉴 항목 카운트) 양쪽 표시. 0건 시 둘 다 숨김. Owner 만 fetch (비-OWNER 는 메뉴 자체 미노출).
+- **B1 polish 의 detail 메시지 ("please try again shortly") 가 이번에 wired up**: GitEventListModal 의 onError 분기에서 409 → "처리 중입니다 — 잠시 후 다시 시도해 주세요" alert. backend detail 은 영문이지만 frontend 에서 한글로 변환 (사용자 직접 노출 메시지).
+- **next 할 일은 Phase 6** (Discord 3 템플릿 + cooldown). B2 가 sync-failure 1 alert 만 깔아둠 — failure 외 success-flow 알림은 Phase 6 본편.
+
+---
+
 ## 2026-05-01 (Phase 5 follow-up B1)
 
 - [x] **B1 — Quality fixes (race + 미사용 컬럼 + refactor)** — 브랜치 `feature/phase-5-followup-b1-quality`
