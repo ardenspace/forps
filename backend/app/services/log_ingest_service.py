@@ -4,17 +4,23 @@
 """
 
 import asyncio
+import json as _json
 import logging
+import re
 from datetime import datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 import bcrypt
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.log_event import LogEvent, LogLevel
 from app.models.log_ingest_token import LogIngestToken
 from app.models.rate_limit_window import RateLimitWindow
+from app.schemas.log_ingest import LogEventInput
 
 logger = logging.getLogger(__name__)
 
@@ -106,3 +112,69 @@ async def check_rate_limit(
             detail="Rate limit exceeded",
             headers={"Retry-After": str(seconds_remaining)},
         )
+
+
+_VERSION_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_EXTRA_MAX_BYTES = 4 * 1024  # 4KB
+
+
+def validate_event(
+    event_dict: dict[str, Any], index: int, project_id: UUID,
+) -> tuple[LogEvent | None, dict | None]:
+    """단일 event dict 검증 — Pydantic + version_sha 형식 + extra 크기.
+
+    valid → (LogEvent, None). invalid → (None, {"index": index, "reason": "..."}).
+    """
+    # Pydantic schema validate
+    try:
+        parsed = LogEventInput.model_validate(event_dict)
+    except ValidationError as e:
+        first = e.errors()[0]
+        loc = ".".join(str(x) for x in first["loc"])
+        msg = first["msg"]
+        return None, {"index": index, "reason": f"{loc}: {msg}"}
+
+    # version_sha 형식
+    if parsed.version_sha != "unknown" and not _VERSION_SHA_RE.match(parsed.version_sha):
+        return None, {"index": index, "reason": "version_sha format invalid"}
+
+    # extra 크기 (JSON 직렬화 후 byte 수)
+    if parsed.extra is not None:
+        extra_bytes = len(_json.dumps(parsed.extra).encode("utf-8"))
+        if extra_bytes > _EXTRA_MAX_BYTES:
+            return None, {"index": index, "reason": f"extra exceeds {_EXTRA_MAX_BYTES} bytes"}
+
+    # LogLevel 정규화 (대소문자 무관)
+    try:
+        level = LogLevel(parsed.level.lower())
+    except ValueError:
+        return None, {"index": index, "reason": f"level invalid: {parsed.level}"}
+
+    log_event = LogEvent(
+        project_id=project_id,
+        level=level,
+        message=parsed.message,
+        logger_name=parsed.logger_name,
+        version_sha=parsed.version_sha,
+        environment=parsed.environment,
+        hostname=parsed.hostname,
+        emitted_at=parsed.emitted_at,
+        exception_class=parsed.exception_class,
+        exception_message=parsed.exception_message,
+        stack_trace=parsed.stack_trace,
+        stack_frames=[f.model_dump() for f in parsed.stack_frames] if parsed.stack_frames else None,
+        user_id_external=parsed.user_id_external,
+        request_id=parsed.request_id,
+        extra=parsed.extra,
+    )
+    return log_event, None
+
+
+async def insert_events(db: AsyncSession, events: list[LogEvent]) -> int:
+    """batch INSERT — fingerprint=NULL (Phase 3 의 fingerprint_service 가 처리).
+
+    단일 트랜잭션. flush 만 (commit 은 caller).
+    """
+    db.add_all(events)
+    await db.flush()
+    return len(events)

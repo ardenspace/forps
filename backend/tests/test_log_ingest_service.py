@@ -197,3 +197,103 @@ async def test_check_rate_limit_next_minute_new_row(async_session: AsyncSession)
     )
     assert row1.event_count == 5
     assert row2.event_count == 3
+
+
+# ---- validate_event ----
+
+def _valid_event_dict() -> dict:
+    """테스트용 정상 event dict — 모든 필수 필드 포함."""
+    return {
+        "level": "ERROR",
+        "message": "test error",
+        "logger_name": "app.test",
+        "version_sha": "a" * 40,
+        "environment": "production",
+        "hostname": "host-1",
+        "emitted_at": "2026-05-01T10:30:00Z",
+    }
+
+
+def test_validate_event_valid_returns_log_event():
+    """정상 event dict → (LogEvent, None)."""
+    proj_id = uuid.uuid4()
+    log_event, rejection = log_ingest_service.validate_event(
+        _valid_event_dict(), index=0, project_id=proj_id,
+    )
+    assert log_event is not None
+    assert rejection is None
+    assert log_event.project_id == proj_id
+    assert log_event.message == "test error"
+    assert log_event.version_sha == "a" * 40
+
+
+def test_validate_event_unknown_version_sha_ok():
+    """version_sha == 'unknown' 정상."""
+    d = _valid_event_dict()
+    d["version_sha"] = "unknown"
+    log_event, rejection = log_ingest_service.validate_event(d, 0, uuid.uuid4())
+    assert log_event is not None
+    assert rejection is None
+
+
+def test_validate_event_short_sha_rejected():
+    """version_sha short SHA → reject."""
+    d = _valid_event_dict()
+    d["version_sha"] = "abc1234"  # 7자, 40자 아님
+    log_event, rejection = log_ingest_service.validate_event(d, 5, uuid.uuid4())
+    assert log_event is None
+    assert rejection == {"index": 5, "reason": "version_sha format invalid"}
+
+
+def test_validate_event_extra_field_rejected():
+    """Pydantic schema 위배 (extra='forbid') → reject."""
+    d = _valid_event_dict()
+    d["unknown_field"] = "boom"
+    log_event, rejection = log_ingest_service.validate_event(d, 2, uuid.uuid4())
+    assert log_event is None
+    assert rejection["index"] == 2
+    assert "unknown_field" in rejection["reason"] or "extra" in rejection["reason"].lower()
+
+
+def test_validate_event_oversized_extra_rejected():
+    """extra > 4KB → reject."""
+    d = _valid_event_dict()
+    d["extra"] = {"k": "x" * 5000}  # > 4KB
+    log_event, rejection = log_ingest_service.validate_event(d, 1, uuid.uuid4())
+    assert log_event is None
+    assert rejection["index"] == 1
+    assert "extra" in rejection["reason"].lower()
+
+
+# ---- insert_events ----
+
+async def test_insert_events_batch_inserts_with_null_fingerprint(async_session: AsyncSession):
+    """batch INSERT → 모든 row 의 fingerprint=NULL."""
+    proj, token, _ = await _seed_project_and_token(async_session)
+    from app.models.log_event import LogEvent, LogLevel
+
+    events = [
+        LogEvent(
+            project_id=proj.id,
+            level=LogLevel.ERROR,
+            message=f"msg-{i}",
+            logger_name="app.test",
+            version_sha="a" * 40,
+            environment="production",
+            hostname="host-1",
+            emitted_at=datetime.utcnow(),
+        )
+        for i in range(5)
+    ]
+
+    inserted = await log_ingest_service.insert_events(async_session, events)
+    assert inserted == 5
+
+    from sqlalchemy import select
+    rows = (await async_session.execute(
+        select(LogEvent).where(LogEvent.project_id == proj.id)
+    )).scalars().all()
+    assert len(rows) == 5
+    for row in rows:
+        assert row.fingerprint is None
+        assert row.fingerprinted_at is None
