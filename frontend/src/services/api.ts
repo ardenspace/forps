@@ -18,6 +18,7 @@ import type {
   ShareLinkCreateRequest,
   GitSettings,
   GitSettingsUpdate,
+  GitEventSummary,
   WebhookRegisterResponse,
   HandoffSummary,
   ReprocessResponse,
@@ -115,6 +116,11 @@ export const api = {
       apiClient.post<WebhookRegisterResponse>(`/projects/${projectId}/git-settings/webhook`),
     listHandoffs: (projectId: string, params?: { branch?: string; limit?: number }) =>
       apiClient.get<HandoffSummary[]>(`/projects/${projectId}/handoffs`, { params }),
+    listGitEvents: (
+      projectId: string,
+      params?: { failed_only?: boolean; limit?: number },
+    ) =>
+      apiClient.get<GitEventSummary[]>(`/projects/${projectId}/git-events`, { params }),
     reprocessEvent: (projectId: string, eventId: string) =>
       apiClient.post<ReprocessResponse>(`/projects/${projectId}/git-events/${eventId}/reprocess`),
   },

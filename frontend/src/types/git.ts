@@ -36,3 +36,13 @@ export interface ReprocessResponse {
   event_id: string;
   status: string;
 }
+
+export interface GitEventSummary {
+  id: string;
+  branch: string;
+  head_commit_sha: string;
+  pusher: string;
+  received_at: string;
+  processed_at: string | null;
+  error: string | null;
+}

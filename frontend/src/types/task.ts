@@ -34,6 +34,8 @@ export interface Task {
   external_id: string | null;
   last_commit_sha: string | null;
   archived_at: string | null;
+  // Phase 5 follow-up B2 — handoff missing 배지 (TaskCard ⚠️)
+  handoff_missing: boolean;
 }
 
 export interface TaskCreate {
