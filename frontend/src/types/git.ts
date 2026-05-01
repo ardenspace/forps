@@ -7,6 +7,10 @@ export interface GitSettings {
   has_webhook_secret: boolean;
   has_github_pat: boolean;
   public_webhook_url: string;
+  // Phase 6 — Discord 알림 상태
+  discord_enabled: boolean;
+  discord_disabled_at: string | null;       // ISO datetime
+  discord_consecutive_failures: number;
 }
 
 export interface GitSettingsUpdate {
