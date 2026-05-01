@@ -101,6 +101,7 @@ async def process_event(
             short_sha=event.head_commit_sha[:7],
             plan_changes=plan_changes,
             handoff_missing=handoff_missing,
+            handoff_path=_handoff_file_path(project, event.branch),
         )
         if content:
             try:
@@ -199,8 +200,12 @@ def _format_push_summary(
     short_sha: str,
     plan_changes: PlanChanges | None,
     handoff_missing: bool,
+    handoff_path: str,
 ) -> str | None:
-    """push summary 메시지 생성. 모든 카테고리 비고 + handoff 정상 → None."""
+    """push summary 메시지 생성. 모든 카테고리 비고 + handoff 정상 → None.
+
+    handoff_path: `_handoff_file_path(project, branch)` 결과 (custom handoff_dir / 슬래시 branch 정확).
+    """
     has_plan = plan_changes is not None and plan_changes.has_changes()
     if not has_plan and not handoff_missing:
         return None
@@ -222,7 +227,7 @@ def _format_push_summary(
                 lines.append(f"  • [{ext_id}] {title} (archived)")
 
     if handoff_missing:
-        lines.append(f"⚠️ handoff 누락 — handoffs/{branch}.md 갱신 필요")
+        lines.append(f"⚠️ handoff 누락 — {handoff_path} 갱신 필요")
 
     return "\n".join(lines)
 
