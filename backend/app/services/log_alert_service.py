@@ -33,7 +33,10 @@ async def notify_new_error(
     if project is None:
         return
     if group.last_alerted_new_at is not None:
-        return  # race 방지 — 동시 신규 INSERT 의 다른 caller 가 먼저 알림 가능
+        # Single-caller invariant: 본 함수는 fingerprint_processor 의 is_new=True 분기에서만 호출됨.
+        # error_group_service.upsert 의 SAVEPOINT race 가 loser 에게 is_new=False 줘 단일 caller 보장.
+        # 향후 다른 caller (Phase 6 spike/regression) 추가 시 with_for_update 재검증 필요.
+        return
 
     short_sha = (
         event.version_sha[:7] if event.version_sha != "unknown" else "unknown"
