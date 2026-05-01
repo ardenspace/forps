@@ -1,5 +1,23 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-05-01 (저녁) — Error-log Phase 5 Backend
+
+- [x] PATCH /errors/{group_id} — status 전이 (resolve/ignore/reopen/unmute), OWNER 전용, action 기반 (status 직접 X)
+- [x] GET /log-tokens — 토큰 목록, OWNER 전용, secret 절대 비노출, include_revoked 필터
+- [x] GET /log-health — unknown SHA 비율 + clock drift + 24h 송신량, 멤버 누구나 (VIEWER 포함)
+- [x] error_group_service.transition_status — _LEGAL_TRANSITIONS 매트릭스 + audit 필드 (resolved_at / resolved_by / resolved_in_version_sha) 자동 채움/클리어
+- [x] log_health_service.compute_health — 단일 SQL 3 집계 (total / unknown / drift)
+- [x] ErrorGroupSummary 에 audit 필드 (resolved_*) 추가 (Task 3 review #7)
+- [x] service 가 flush, endpoint 가 commit (Task 2 review I-1, `upsert` 와 같은 파일 컨벤션)
+- [x] test_compute_health_excludes_old 에서 yesterday 파티션 수동 생성 (alembic 은 today+30 days 만 생성)
+- [x] **검증**: backend **309 tests pass** (275 baseline + 34 신규)
+
+### 다음 (Phase 5 Frontend Errors — sub-phase 2)
+
+- [ ] ErrorsPage / ErrorDetailPage / GitContextPanel 등 — 별도 PR
+- [ ] PATCH endpoint 사용한 status 전이 UI (resolve/ignore/reopen 버튼)
+- [ ] LogHealthBadge — 헤더의 ⚠️ 표시 (unknown_sha_ratio_24h > 0.05 시)
+
 ## 2026-05-01 (Error-log Phase 4 — Query API + Git Context Join)
 
 - [x] **Error-log Phase 4** — 브랜치 `feature/error-log-phase4-query`
