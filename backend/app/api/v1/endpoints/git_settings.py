@@ -256,7 +256,7 @@ async def reprocess_git_event(
     if event.processed_at is None:
         raise HTTPException(
             status_code=409,
-            detail="Event is still being processed — wait for completion or reaper",
+            detail="Event is still being processed — please try again shortly",
         )
 
     if event.processed_at is not None and event.error is None:

@@ -916,8 +916,8 @@ async def test_concurrent_process_event_only_runs_once(
     dsn = upgraded_db["async_url"]
     engine_a = create_async_engine(dsn, echo=False)
     engine_b = create_async_engine(dsn, echo=False)
-    Maker_a = async_sessionmaker(engine_a, expire_on_commit=False)
-    Maker_b = async_sessionmaker(engine_b, expire_on_commit=False)
+    maker_a = async_sessionmaker(engine_a, expire_on_commit=False)
+    maker_b = async_sessionmaker(engine_b, expire_on_commit=False)
 
     counter = {"n": 0}
     release = asyncio.Event()
@@ -948,9 +948,9 @@ async def test_concurrent_process_event_only_runs_once(
 
     try:
         # T1 먼저 시작해 lock 획득. T2 는 약간 후에 시작해 entry 에서 대기.
-        t1 = asyncio.create_task(runner(Maker_a))
+        t1 = asyncio.create_task(runner(maker_a))
         await asyncio.sleep(0.05)
-        t2 = asyncio.create_task(runner(Maker_b))
+        t2 = asyncio.create_task(runner(maker_b))
         rel = asyncio.create_task(releaser())
         await asyncio.gather(t1, t2, rel)
     finally:
