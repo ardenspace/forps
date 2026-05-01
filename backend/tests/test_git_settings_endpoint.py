@@ -838,3 +838,85 @@ async def test_list_git_events_limit_clamped_to_max(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: GitSettings 응답 확장 + POST /discord-reset
+# ---------------------------------------------------------------------------
+
+
+async def test_get_git_settings_includes_discord_status(
+    client_with_db, async_session: AsyncSession
+):
+    """GET /git-settings 응답에 discord_enabled / discord_disabled_at / discord_consecutive_failures 포함."""
+    user, proj = await _seed_user_project(async_session)
+    proj.discord_webhook_url = "https://discord.com/api/webhooks/1/abc"
+    await async_session.commit()
+
+    token = _auth_token(user)
+    res = await client_with_db.get(
+        f"/api/v1/projects/{proj.id}/git-settings",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["discord_enabled"] is True
+    assert body["discord_disabled_at"] is None
+    assert body["discord_consecutive_failures"] == 0
+
+
+async def test_discord_reset_clears_counter_and_disabled_at(
+    client_with_db, async_session: AsyncSession
+):
+    """POST /discord-reset (OWNER) → counter 0 + disabled_at NULL."""
+    user, proj = await _seed_user_project(async_session)
+    proj.discord_webhook_url = "https://discord.com/api/webhooks/1/abc"
+    proj.discord_consecutive_failures = 3
+    proj.discord_disabled_at = datetime.utcnow()
+    await async_session.commit()
+
+    token = _auth_token(user)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-settings/discord-reset",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["discord_enabled"] is True
+    assert body["discord_disabled_at"] is None
+    assert body["discord_consecutive_failures"] == 0
+
+    await async_session.refresh(proj)
+    assert proj.discord_consecutive_failures == 0
+    assert proj.discord_disabled_at is None
+
+
+async def test_discord_reset_403_for_non_owner(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session, role=WorkspaceRole.EDITOR)
+    token = _auth_token(user)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-settings/discord-reset",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 403
+
+
+async def test_discord_reset_404_for_non_member(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session)
+    other = User(
+        email=f"o-{uuid.uuid4().hex[:8]}@example.com", name="bob", password_hash="x",
+    )
+    async_session.add(other)
+    await async_session.commit()
+    await async_session.refresh(other)
+
+    token = _auth_token(other)
+    res = await client_with_db.post(
+        f"/api/v1/projects/{proj.id}/git-settings/discord-reset",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404

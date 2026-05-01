@@ -22,6 +22,10 @@ class GitSettingsResponse(BaseModel):
     has_webhook_secret: bool
     has_github_pat: bool
     public_webhook_url: str
+    # Phase 6 — Discord 알림 상태
+    discord_enabled: bool
+    discord_disabled_at: datetime | None
+    discord_consecutive_failures: int
 
 
 class GitSettingsUpdate(BaseModel):

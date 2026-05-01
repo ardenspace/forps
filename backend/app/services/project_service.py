@@ -120,6 +120,13 @@ async def update_project(
     db: AsyncSession, project: Project, data: ProjectUpdate
 ) -> Project:
     update_data = data.model_dump(exclude_unset=True)
+    # Phase 6: discord_webhook_url 변경 감지 시 counter / disabled_at reset (URL 바뀌면 새 시작)
+    if (
+        "discord_webhook_url" in update_data
+        and update_data["discord_webhook_url"] != project.discord_webhook_url
+    ):
+        project.discord_consecutive_failures = 0
+        project.discord_disabled_at = None
     for field, value in update_data.items():
         setattr(project, field, value)
 
