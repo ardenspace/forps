@@ -757,3 +757,84 @@ async def test_concurrent_register_webhook_serializes(
         "FOR UPDATE 가 register_webhook 에 적용되지 않음"
     )
     assert update_calls["n"] == 1
+
+
+# ---------------------------------------------------------------------------
+# B2: GET /git-events — failed events 조회
+# ---------------------------------------------------------------------------
+
+
+async def test_list_git_events_returns_only_failed(
+    client_with_db, async_session: AsyncSession
+):
+    """failed_only=true (기본) 이면 processed_at NOT NULL AND error NOT NULL 만 반환."""
+    user, proj = await _seed_user_project(async_session)
+    now = datetime.utcnow()
+    # success
+    async_session.add(GitPushEvent(
+        project_id=proj.id, branch="main", head_commit_sha="a" * 40,
+        commits=[], commits_truncated=False, pusher="alice",
+        received_at=now, processed_at=now, error=None,
+    ))
+    # in-flight (processed_at NULL)
+    async_session.add(GitPushEvent(
+        project_id=proj.id, branch="main", head_commit_sha="b" * 40,
+        commits=[], commits_truncated=False, pusher="alice",
+        received_at=now,
+    ))
+    # failed
+    async_session.add(GitPushEvent(
+        project_id=proj.id, branch="feature/x", head_commit_sha="c" * 40,
+        commits=[], commits_truncated=False, pusher="bob",
+        received_at=now, processed_at=now, error="MalformedHandoffError: bad",
+    ))
+    await async_session.commit()
+
+    token = _auth_token(user)
+    res = await client_with_db.get(
+        f"/api/v1/projects/{proj.id}/git-events",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    items = res.json()
+    assert len(items) == 1
+    assert items[0]["head_commit_sha"] == "c" * 40
+    assert items[0]["error"] == "MalformedHandoffError: bad"
+    assert items[0]["branch"] == "feature/x"
+    # commits / before_commit_sha 는 응답 미포함
+    assert "commits" not in items[0]
+    assert "before_commit_sha" not in items[0]
+
+
+async def test_list_git_events_404_for_non_member(
+    client_with_db, async_session: AsyncSession
+):
+    user, proj = await _seed_user_project(async_session)
+    other = User(
+        email=f"o-{uuid.uuid4().hex[:8]}@example.com",
+        name="bob",
+        password_hash="x",
+    )
+    async_session.add(other)
+    await async_session.commit()
+    await async_session.refresh(other)
+
+    token = _auth_token(other)
+    res = await client_with_db.get(
+        f"/api/v1/projects/{proj.id}/git-events",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
+
+
+async def test_list_git_events_limit_clamped_to_max(
+    client_with_db, async_session: AsyncSession
+):
+    """limit > 200 도 200 으로 clamp — 422 안 남."""
+    user, proj = await _seed_user_project(async_session)
+    token = _auth_token(user)
+    res = await client_with_db.get(
+        f"/api/v1/projects/{proj.id}/git-events?limit=99999",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200

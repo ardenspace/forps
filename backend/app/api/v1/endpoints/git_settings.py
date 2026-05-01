@@ -18,6 +18,7 @@ from app.dependencies import CurrentUser
 from app.models.git_push_event import GitPushEvent
 from app.models.handoff import Handoff
 from app.schemas.git_settings import (
+    GitEventSummary,
     GitSettingsResponse,
     GitSettingsUpdate,
     HandoffSummary,
@@ -221,6 +222,57 @@ async def list_handoffs(
             parsed_tasks_count=len(h.parsed_tasks or []),
         )
         for h in rows
+    ]
+
+
+@router.get(
+    "/{project_id}/git-events",
+    response_model=list[GitEventSummary],
+)
+async def list_git_events(
+    project_id: UUID,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    failed_only: bool = True,
+    limit: int = 50,
+):
+    """프로젝트의 git push event list — v1 은 failed only 가 의미 있는 case.
+
+    설계서: 2026-05-01-phase-5-followup-b2-design.md §2.3
+    """
+    project = await project_service.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    role = await get_effective_role(db, user.id, project_id)
+    if role is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    limit = max(1, min(limit, 200))
+
+    stmt = (
+        select(GitPushEvent)
+        .where(GitPushEvent.project_id == project_id)
+        .order_by(GitPushEvent.received_at.desc(), GitPushEvent.id.desc())
+        .limit(limit)
+    )
+    if failed_only:
+        stmt = stmt.where(
+            GitPushEvent.processed_at.is_not(None),
+            GitPushEvent.error.is_not(None),
+        )
+
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        GitEventSummary(
+            id=e.id,
+            branch=e.branch,
+            head_commit_sha=e.head_commit_sha,
+            pusher=e.pusher,
+            received_at=e.received_at,
+            processed_at=e.processed_at,
+            error=e.error,
+        )
+        for e in rows
     ]
 
 
