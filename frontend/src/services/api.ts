@@ -22,6 +22,13 @@ import type {
   WebhookRegisterResponse,
   HandoffSummary,
   ReprocessResponse,
+  ErrorGroupListResponse,
+  ErrorGroupDetail,
+  ErrorGroupStatus,
+  ErrorGroupStatusUpdateRequest,
+  ErrorGroupSummary,
+  LogEventListResponse,
+  LogLevel,
 } from '@/types';
 
 const apiClient = axios.create({
@@ -140,6 +147,33 @@ export const api = {
       apiClient.put<Task>(`/tasks/${id}`, data),
     delete: (id: string) =>
       apiClient.delete(`/tasks/${id}`),
+  },
+
+  errors: {
+    list: (
+      projectId: string,
+      params?: { status?: ErrorGroupStatus; since?: string; offset?: number; limit?: number },
+    ) =>
+      apiClient.get<ErrorGroupListResponse>(`/projects/${projectId}/errors`, { params }),
+    get: (projectId: string, groupId: string) =>
+      apiClient.get<ErrorGroupDetail>(`/projects/${projectId}/errors/${groupId}`),
+    transition: (
+      projectId: string,
+      groupId: string,
+      data: ErrorGroupStatusUpdateRequest,
+    ) =>
+      apiClient.patch<ErrorGroupSummary>(
+        `/projects/${projectId}/errors/${groupId}`,
+        data,
+      ),
+  },
+
+  logs: {
+    list: (
+      projectId: string,
+      params?: { level?: LogLevel; since?: string; q?: string; offset?: number; limit?: number },
+    ) =>
+      apiClient.get<LogEventListResponse>(`/projects/${projectId}/logs`, { params }),
   },
 };
 
