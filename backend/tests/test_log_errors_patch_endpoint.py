@@ -88,6 +88,9 @@ async def test_patch_resolve_ok(client_with_db, async_session: AsyncSession):
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "resolved"
+    assert body["resolved_at"] is not None
+    assert body["resolved_in_version_sha"] == sha
+    assert body["resolved_by_user_id"] == str(user.id)
 
 
 async def test_patch_owner_required(client_with_db, async_session: AsyncSession):

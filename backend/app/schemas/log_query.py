@@ -69,6 +69,9 @@ class ErrorGroupSummary(BaseModel):
     first_seen_version_sha: str
     last_seen_at: datetime
     last_seen_version_sha: str
+    resolved_at: datetime | None = None
+    resolved_by_user_id: UUID | None = None
+    resolved_in_version_sha: str | None = None
 
 
 class ErrorGroupListResponse(BaseModel):
