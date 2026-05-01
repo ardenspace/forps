@@ -1,5 +1,24 @@
 # Handoff: main — @ardensdevspace
 
+## 2026-05-01 (밤) — Error-log Phase 5 Frontend Errors
+
+- [x] DashboardPage 'errors' viewMode 추가 — Board / Table / Week / Errors 토글
+- [x] ErrorsList — status 필터 (전체 / OPEN / REGRESSED / RESOLVED / IGNORED) + 목록 + 클릭 → 상세
+- [x] ErrorDetail — 헤더 + audit 필드 + git 컨텍스트 + 최근 이벤트 + 액션 버튼 (resolve/ignore/reopen/unmute, OWNER 만)
+- [x] GitContextPanel — first_seen 의 handoffs/tasks(archived 배지)/push event + previous_good_sha
+- [x] LogLevelBadge / StackTraceViewer (작은 reusable; StackTraceViewer 는 v2 에서 사용)
+- [x] useErrorGroups hooks — list / detail / transition (TanStack Query, list+detail invalidate)
+- [x] api.errors / api.logs namespace + types/error.ts / types/log.ts
+- [x] Project 타입에 last_synced_commit_sha 추가 (resolve 액션의 defaultResolveSha 자동 사용)
+
+### 다음 (Frontend Logs sub-phase 또는 Frontend Ops sub-phase)
+
+- [ ] LogsPage + LogSearchBox (pg_trgm) — Logs 토글 새 viewMode
+- [ ] LogTokensPage + LogHealthBadge — 헤더 ⚠️ + 토큰 관리
+- [ ] URL 라우팅 (deep-link `/projects/:id/errors/:groupId` ) — Discord 알림에서 직접 이동
+- [ ] resolve 시 user-입력 sha (현재는 자동 last_synced_commit_sha)
+- [ ] StackTraceViewer 실제 활용 — 별도 endpoint 또는 LogEventDetail schema
+
 ## 2026-05-01 (저녁) — Error-log Phase 5 Backend
 
 - [x] PATCH /errors/{group_id} — status 전이 (resolve/ignore/reopen/unmute), OWNER 전용, action 기반 (status 직접 X)
