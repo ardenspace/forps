@@ -9,7 +9,7 @@ export function StackTraceViewer({ trace, defaultOpen = false }: StackTraceViewe
   }
   return (
     <details
-      className="border-2 border-black/20 rounded bg-gray-50"
+      className="border border-brand-blue/20/20 rounded bg-gray-50"
       open={defaultOpen}
     >
       <summary className="cursor-pointer px-2 py-1 text-xs font-bold hover:bg-gray-100 select-none">

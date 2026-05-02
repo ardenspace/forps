@@ -10,14 +10,14 @@ const SHORT_SHA = (sha: string) => sha.slice(0, 8);
 function ShaBadge({ sha, label }: { sha: string; label?: string }) {
   if (sha === 'unknown') {
     return (
-      <span className="inline-block px-1.5 py-0.5 text-[10px] font-mono border-2 border-yellow-500 bg-yellow-100 text-yellow-800 rounded">
+      <span className="inline-block px-1.5 py-0.5 text-[10px] font-mono border-2 border-yellow-500 bg-white/60 text-yellow-800 rounded">
         unknown {label ? `(${label})` : ''}
       </span>
     );
   }
   return (
     <code
-      className="inline-block px-1.5 py-0.5 text-[10px] font-mono border-2 border-black/20 bg-white rounded"
+      className="inline-block px-1.5 py-0.5 text-[10px] font-mono border border-brand-blue/20/20 bg-white rounded"
       title={sha}
     >
       {SHORT_SHA(sha)}
@@ -33,7 +33,7 @@ export function GitContextPanel({ context, firstSeenSha }: GitContextPanelProps)
     first_seen.git_push_event !== null;
 
   return (
-    <section className="border-2 border-black bg-white p-3 sm:p-4 shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] rounded">
+    <section className="border border-brand-blue/20 bg-white p-3 sm:p-4 shadow-sm rounded">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm sm:text-base font-black">Git 컨텍스트</h3>
         <ShaBadge sha={firstSeenSha} label="first seen" />
@@ -48,7 +48,7 @@ export function GitContextPanel({ context, firstSeenSha }: GitContextPanelProps)
       {first_seen.git_push_event && (
         <div className="mb-3">
           <p className="text-[10px] text-muted-foreground font-bold mb-1">PUSH 이벤트</p>
-          <div className="border border-black/20 rounded p-2 bg-gray-50 text-xs">
+          <div className="border border-brand-blue/20/20 rounded p-2 bg-gray-50 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <ShaBadge sha={first_seen.git_push_event.head_commit_sha} />
               <span className="text-muted-foreground">on</span>
@@ -70,7 +70,7 @@ export function GitContextPanel({ context, firstSeenSha }: GitContextPanelProps)
           </p>
           <ul className="space-y-1">
             {first_seen.handoffs.map((h) => (
-              <li key={h.id} className="border border-black/20 rounded p-2 bg-gray-50 text-xs">
+              <li key={h.id} className="border border-brand-blue/20/20 rounded p-2 bg-gray-50 text-xs">
                 <div className="flex flex-wrap items-center gap-2">
                   <ShaBadge sha={h.commit_sha} />
                   <code className="text-[11px] font-mono">{h.branch}</code>
@@ -92,7 +92,7 @@ export function GitContextPanel({ context, firstSeenSha }: GitContextPanelProps)
           </p>
           <ul className="space-y-1">
             {first_seen.tasks.map((t) => (
-              <li key={t.id} className="border border-black/20 rounded p-2 bg-gray-50 text-xs">
+              <li key={t.id} className="border border-brand-blue/20/20 rounded p-2 bg-gray-50 text-xs">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-bold">{t.title}</span>
                   {t.archived_at && (
@@ -112,7 +112,7 @@ export function GitContextPanel({ context, firstSeenSha }: GitContextPanelProps)
         </div>
       )}
 
-      <div className="mt-3 pt-2 border-t border-black/10">
+      <div className="mt-3 pt-2 border-t border-brand-blue/20/10">
         <p className="text-[10px] text-muted-foreground font-bold mb-1">직전 정상 SHA</p>
         {previous_good_sha ? (
           <ShaBadge sha={previous_good_sha} label="last clean" />

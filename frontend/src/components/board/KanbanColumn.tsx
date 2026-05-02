@@ -11,10 +11,10 @@ interface KanbanColumnProps {
 }
 
 const statusStyles: Record<TaskStatus, string> = {
-  todo: 'bg-white',
-  doing: 'bg-yellow-50',
-  done: 'bg-green-50',
-  blocked: 'bg-red-50',
+  todo: 'bg-white/30 border-white/40',
+  doing: 'bg-brand-neon/10 border-brand-neon/20',
+  done: 'bg-brand-sky/20 border-brand-sky/30',
+  blocked: 'bg-brand-orange/10 border-brand-orange/20',
 };
 
 export function KanbanColumn({ status, title, tasks, onTaskClick, isDragDisabled }: KanbanColumnProps) {
@@ -25,13 +25,13 @@ export function KanbanColumn({ status, title, tasks, onTaskClick, isDragDisabled
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 min-w-[220px] sm:min-w-[250px] border-2 border-black p-2.5 sm:p-3 shadow-[4px_4px_0px_0px_rgba(244,0,4,1)] transition-colors ${statusStyles[status]} ${
-        isOver ? 'ring-2 ring-yellow-400 bg-yellow-100/50' : ''
+      className={`flex-1 min-w-[220px] sm:min-w-[250px] rounded-2xl border p-3 sm:p-4 backdrop-blur-sm shadow-sm transition-all duration-200 ${statusStyles[status]} ${
+        isOver ? 'ring-2 ring-brand-neon bg-brand-neon/20 scale-[1.01]' : ''
       }`}
     >
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-black text-sm uppercase tracking-wide">{title}</h3>
-        <span className="bg-black text-white text-xs px-2 py-0.5 font-bold">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-sm uppercase tracking-wide text-brand-blue">{title}</h3>
+        <span className="bg-brand-blue text-white text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm">
           {tasks.length}
         </span>
       </div>

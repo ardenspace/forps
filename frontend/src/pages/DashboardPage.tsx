@@ -247,10 +247,10 @@ export function DashboardPage() {
         </ul>
       </div>
 
-      <div className="mt-auto pt-3 space-y-2 border-t-2 border-black/10">
+      <div className="mt-auto pt-3 space-y-2 border-t border-brand-blue/10">
         {selectedWorkspaceId && (
           <button
-            className="text-xs sm:text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 px-2 py-1.5 rounded border-2 border-dashed border-muted-foreground hover:border-black hover:bg-yellow-50 transition-all font-medium w-full md:w-full"
+            className="text-xs sm:text-sm text-brand-blue/70 hover:text-brand-blue flex items-center justify-center gap-1 px-2 py-2 rounded-xl border border-dashed border-brand-blue/30 hover:border-brand-blue hover:bg-brand-sky/20 transition-all font-medium w-full md:w-full"
             onClick={() => {
               setCreateProjectModalOpen(true);
               closeMobileSidebar();
@@ -263,7 +263,7 @@ export function DashboardPage() {
 
         {selectedProjectId && myRole === 'owner' && (
           <button
-            className="text-xs sm:text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 px-2 py-1.5 rounded border-2 border-dashed border-muted-foreground hover:border-black hover:bg-yellow-50 transition-all font-medium w-full md:w-full"
+            className="text-xs sm:text-sm text-brand-blue/70 hover:text-brand-blue flex items-center justify-center gap-1 px-2 py-2 rounded-xl border border-dashed border-brand-blue/30 hover:border-brand-blue hover:bg-brand-sky/20 transition-all font-medium w-full md:w-full"
             onClick={() => {
               setProjectMemberModalOpen(true);
               closeMobileSidebar();
@@ -276,7 +276,7 @@ export function DashboardPage() {
         {selectedProjectId && myRole === 'owner' && (
           <div className="space-y-2">
             <div className="space-y-1">
-              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground">
+              <label className="text-[10px] sm:text-xs font-medium text-brand-blue/70">
                 Discord Webhook URL
               </label>
               <input
@@ -287,11 +287,11 @@ export function DashboardPage() {
                   setWebhookUrl(e.target.value);
                   setWebhookEditing(true);
                 }}
-                className="w-full text-xs px-2 py-1.5 border-2 border-black/20 rounded focus:border-black focus:outline-none bg-white"
+                className="w-full text-xs px-2 py-1.5 border border-brand-blue/20 rounded-lg focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/20 focus:outline-none bg-white/50 backdrop-blur-sm"
               />
               {isWebhookEditing && (
                 <button
-                  className="text-xs font-bold px-2 py-1 border-2 border-black bg-yellow-300 hover:bg-yellow-400 rounded transition-colors w-full"
+                  className="text-xs font-bold px-2 py-1.5 border border-brand-neon bg-brand-neon text-brand-coffee hover:brightness-110 rounded-lg transition-all w-full shadow-sm"
                   disabled={updateProjectMutation.isPending}
                   onClick={handleSaveWebhookUrl}
                 >
@@ -300,7 +300,7 @@ export function DashboardPage() {
               )}
             </div>
             <button
-              className="text-xs sm:text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 px-2 py-1.5 rounded border-2 border-dashed border-muted-foreground hover:border-black hover:bg-purple-50 transition-all font-medium w-full md:w-full"
+              className="text-xs sm:text-sm text-brand-blue/70 hover:text-brand-blue flex items-center justify-center gap-1 px-2 py-2 rounded-xl border border-dashed border-brand-blue/30 hover:border-brand-blue hover:bg-brand-sky/20 transition-all font-medium w-full md:w-full"
               disabled={discordMutation.isPending}
               onClick={() => {
                 discordMutation.mutate(undefined, {
@@ -323,49 +323,49 @@ export function DashboardPage() {
   );
 
   return (
-    <div className="min-h-screen md:h-screen flex flex-col bg-background overflow-hidden">
+    <div className="min-h-screen md:h-screen flex flex-col bg-brand-cream overflow-hidden">
       {/* Header */}
-      <header className="border-b-2 border-black bg-card flex-shrink-0 shadow-[0px_2px_0px_0px_rgba(244,0,4,1)]">
-        <div className="px-3 py-3 sm:px-4">
+      <header className="glass-panel flex-shrink-0 z-20 border-b border-white/40">
+        <div className="px-4 py-3 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-              <h1 className="text-lg sm:text-xl font-black tracking-tight">forps</h1>
-              <div className="flex w-full sm:w-auto border-2 border-black rounded overflow-hidden shadow-[2px_2px_0px_0px_rgba(244,0,4,1)]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-brand-blue">forps</h1>
+              <div className="flex w-full sm:w-auto rounded-full p-1 bg-white/50 backdrop-blur-md border border-white/60 shadow-sm gap-1">
                 <button
-                  className={`flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-[11px] sm:text-sm font-bold transition-colors ${
+                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 text-[12px] sm:text-sm font-medium transition-all rounded-full ${
                     viewMode === 'board'
-                      ? 'bg-black text-white'
-                      : 'bg-background hover:bg-yellow-100'
+                      ? 'bg-brand-blue text-white shadow-md'
+                      : 'text-brand-blue hover:bg-white/60'
                   }`}
                   onClick={() => setViewMode('board')}
                 >
                   Board
                 </button>
                 <button
-                  className={`flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-[11px] sm:text-sm font-bold border-l-2 border-black transition-colors ${
+                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 text-[12px] sm:text-sm font-medium transition-all rounded-full ${
                     viewMode === 'table'
-                      ? 'bg-black text-white'
-                      : 'bg-background hover:bg-yellow-100'
+                      ? 'bg-brand-blue text-white shadow-md'
+                      : 'text-brand-blue hover:bg-white/60'
                   }`}
                   onClick={() => setViewMode('table')}
                 >
                   Table
                 </button>
                 <button
-                  className={`flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-[11px] sm:text-sm font-bold border-l-2 border-black transition-colors ${
+                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 text-[12px] sm:text-sm font-medium transition-all rounded-full ${
                     viewMode === 'week'
-                      ? 'bg-black text-white'
-                      : 'bg-background hover:bg-yellow-100'
+                      ? 'bg-brand-blue text-white shadow-md'
+                      : 'text-brand-blue hover:bg-white/60'
                   }`}
                   onClick={() => setViewMode('week')}
                 >
                   Week
                 </button>
                 <button
-                  className={`flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-[11px] sm:text-sm font-bold border-l-2 border-black transition-colors ${
+                  className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 text-[12px] sm:text-sm font-medium transition-all rounded-full ${
                     viewMode === 'errors'
-                      ? 'bg-black text-white'
-                      : 'bg-background hover:bg-yellow-100'
+                      ? 'bg-brand-blue text-white shadow-md'
+                      : 'text-brand-blue hover:bg-white/60'
                   }`}
                   onClick={() => setViewMode('errors')}
                 >
@@ -373,22 +373,22 @@ export function DashboardPage() {
                 </button>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <div className="flex items-center justify-between gap-4 sm:justify-end">
               <button
                 type="button"
                 onClick={() => setMobileSidebarOpen((prev) => !prev)}
-                className="md:hidden border-2 border-black font-bold text-xs px-2.5 py-1.5 bg-white hover:bg-yellow-100"
+                className="md:hidden glass px-3 py-1.5 rounded-lg text-xs font-medium text-brand-blue"
               >
                 메뉴
               </button>
-              <span className="text-xs sm:text-sm font-medium text-muted-foreground truncate max-w-[110px] sm:max-w-none">
+              <span className="text-sm font-medium text-brand-blue/80 truncate max-w-[110px] sm:max-w-none">
                 {user?.name}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={logout}
-                className="border-2 border-black font-bold text-[11px] sm:text-sm px-2.5 sm:px-3 hover:bg-yellow-400 hover:shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] transition-all"
+                className="rounded-full bg-white/40 hover:bg-brand-orange hover:text-white text-brand-blue font-medium px-4 py-1.5 transition-all shadow-sm border border-white/50"
               >
                 로그아웃
               </Button>
@@ -399,8 +399,11 @@ export function DashboardPage() {
 
       {/* Body: Sidebar + Main */}
       <div className="relative flex flex-1 min-h-0 overflow-hidden">
-        <aside className="hidden md:flex w-56 border-r-2 border-black bg-card flex-shrink-0 flex-col p-4 min-h-0">
-          {sidebarContent}
+        <aside className="hidden md:flex w-64 glass-panel border-r border-white/40 flex-shrink-0 flex-col p-5 min-h-0 z-10 relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none rounded-r-2xl" />
+          <div className="relative z-10 flex flex-col h-full">
+            {sidebarContent}
+          </div>
         </aside>
 
         <div
@@ -412,12 +415,12 @@ export function DashboardPage() {
             type="button"
             aria-label="사이드바 닫기"
             onClick={closeMobileSidebar}
-            className={`absolute inset-0 bg-black/50 transition-opacity ${
+            className={`absolute inset-0 bg-brand-coffee/20 backdrop-blur-sm transition-opacity ${
               isMobileSidebarOpen ? 'opacity-100' : 'opacity-0'
             }`}
           />
           <aside
-            className={`absolute left-0 top-0 h-full w-[82vw] max-w-xs border-r-2 border-black bg-card p-3 flex flex-col min-h-0 transition-transform duration-200 ${
+            className={`absolute left-0 top-0 h-full w-[82vw] max-w-xs glass-panel border-r border-white/40 p-4 flex flex-col min-h-0 transition-transform duration-300 ease-out ${
               isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
             }`}
           >
@@ -426,12 +429,12 @@ export function DashboardPage() {
         </div>
 
         {/* Main content */}
-        <main className="flex-1 min-h-0 overflow-auto p-2.5 sm:p-4 md:p-6">
+        <main className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 md:p-8">
           {viewMode === 'board' || viewMode === 'table' ? (
             !selectedProjectId ? (
               <div className="flex items-center justify-center h-full">
-                <div className="text-center border-2 border-black shadow-[6px_6px_0px_0px_rgba(244,0,4,1)] bg-white p-6 sm:p-10 rounded">
-                  <p className="text-muted-foreground font-medium text-sm sm:text-base">
+                <div className="text-center glass-panel p-8 sm:p-12 rounded-2xl max-w-sm">
+                  <p className="text-brand-blue/70 font-medium text-sm sm:text-base">
                     ← 왼쪽에서 프로젝트를 선택하세요.
                   </p>
                 </div>
@@ -450,7 +453,8 @@ export function DashboardPage() {
                   <div className="mb-4">
                     <Button
                       type="button"
-                      className="border-2 border-black font-bold text-xs sm:text-sm w-full sm:w-auto"
+                      variant="outline"
+                      className="rounded-full bg-white/40 border border-brand-blue/20 text-brand-blue hover:bg-white/80 font-bold text-xs sm:text-sm w-full sm:w-auto shadow-sm"
                       onClick={() => setShareManagerOpen(true)}
                     >
                       공유 링크 관리
@@ -477,8 +481,8 @@ export function DashboardPage() {
           ) : viewMode === 'errors' ? (
             !selectedProjectId ? (
               <div className="flex items-center justify-center h-full">
-                <div className="text-center border-2 border-black shadow-[6px_6px_0px_0px_rgba(244,0,4,1)] bg-white p-6 sm:p-10 rounded">
-                  <p className="text-muted-foreground font-medium text-sm sm:text-base">
+                <div className="text-center glass-panel p-8 sm:p-12 rounded-2xl max-w-sm">
+                  <p className="text-brand-blue/70 font-medium text-sm sm:text-base">
                     ← 왼쪽에서 프로젝트를 선택하세요.
                   </p>
                 </div>

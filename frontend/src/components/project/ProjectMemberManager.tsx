@@ -68,14 +68,14 @@ export function ProjectMemberManager({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
-      <div className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
+    <div className="fixed inset-0 bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+      <div className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-black text-base sm:text-lg">프로젝트 멤버 관리</h2>
+          <h2 className="font-bold text-base text-brand-blue sm:text-lg">프로젝트 멤버 관리</h2>
           <Button type="button" variant="ghost" onClick={onClose}>닫기</Button>
         </div>
 
-        <form onSubmit={handleInvite} className="border-2 border-black p-3 mb-4 bg-yellow-50">
+        <form onSubmit={handleInvite} className="border border-brand-blue/20 p-3 mb-4 bg-white/50">
           <p className="font-bold text-sm mb-2">멤버 초대</p>
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <Input
@@ -88,7 +88,7 @@ export function ProjectMemberManager({
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as WorkspaceRole)}
-              className="h-10 border-2 border-black px-2 w-full sm:w-auto"
+              className="h-10 border border-brand-blue/20 px-2 w-full sm:w-auto"
             >
               {roleOptions.map((option) => (
                 <option key={option} value={option}>{option}</option>
@@ -108,7 +108,7 @@ export function ProjectMemberManager({
             {members?.map((member) => (
               <div
                 key={member.id}
-                className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-2 border-black p-3"
+                className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border border-brand-blue/20 p-3"
               >
                 <div>
                   <p className="font-medium text-sm">{member.user.name}</p>
@@ -118,7 +118,7 @@ export function ProjectMemberManager({
                   <select
                     value={member.role}
                     onChange={(e) => handleRoleChange(member.user_id, e.target.value as WorkspaceRole)}
-                    className="h-8 border-2 border-black px-2 text-xs flex-1 sm:flex-none"
+                    className="h-8 border border-brand-blue/20 px-2 text-xs flex-1 sm:flex-none"
                     disabled={member.user_id === currentUserId || updateRole.isPending}
                   >
                     {roleOptions.map((option) => (

@@ -77,7 +77,7 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
           value={repoUrl}
           onChange={(e) => setRepoUrl(e.target.value)}
           placeholder="https://github.com/owner/repo"
-          className="border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(244,0,4,1)]"
+          className="border border-brand-blue/20 rounded-xl w-full px-3 py-2 text-sm focus:outline-none focus:shadow-sm"
         />
       </div>
 
@@ -88,7 +88,7 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
           value={planPath}
           onChange={(e) => setPlanPath(e.target.value)}
           placeholder="PLAN.md"
-          className="border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(244,0,4,1)]"
+          className="border border-brand-blue/20 rounded-xl w-full px-3 py-2 text-sm focus:outline-none focus:shadow-sm"
         />
       </div>
 
@@ -99,7 +99,7 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
           value={handoffDir}
           onChange={(e) => setHandoffDir(e.target.value)}
           placeholder="handoffs/"
-          className="border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(244,0,4,1)]"
+          className="border border-brand-blue/20 rounded-xl w-full px-3 py-2 text-sm focus:outline-none focus:shadow-sm"
         />
       </div>
 
@@ -111,7 +111,7 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
           value={pat}
           onChange={(e) => setPat(e.target.value)}
           placeholder={settings.has_github_pat ? '변경 시에만 입력' : 'ghp_...'}
-          className="border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(244,0,4,1)]"
+          className="border border-brand-blue/20 rounded-xl w-full px-3 py-2 text-sm focus:outline-none focus:shadow-sm"
         />
         <p className="text-[11px] text-muted-foreground mt-1">
           <code className="bg-gray-100 px-1">admin:repo_hook</code> 스코프 필요 —{' '}
@@ -119,7 +119,7 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
             href="https://github.com/settings/tokens/new?scopes=admin:repo_hook"
             target="_blank"
             rel="noopener noreferrer"
-            className="underline hover:text-black"
+            className="underline hover:text-brand-blue"
           >
             토큰 발급
           </a>
@@ -127,7 +127,7 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
       </div>
 
       {/* 구분선 */}
-      <hr className="border-black border-t-2" />
+      <hr className="border-brand-blue/20 border-t-2" />
 
       {/* Webhook 섹션 */}
       <div>
@@ -144,7 +144,7 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
           type="button"
           disabled={webhookDisabled || registerMutation.isPending}
           onClick={handleRegisterWebhook}
-          className="border-2 border-black font-bold px-3 py-1.5 text-xs hover:bg-yellow-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="border border-brand-blue/20 font-bold px-3 py-1.5 text-xs hover:bg-white/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {registerMutation.isPending
             ? '등록 중...'
@@ -160,13 +160,13 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
       </div>
 
       {/* Phase 6: Discord 알림 상태 + 재활성화 */}
-      <div className="border-t-2 border-black pt-4 mt-4">
+      <div className="border-t-2 border-brand-blue/20 pt-4 mt-4">
         <h3 className="font-black text-sm mb-2">Discord 알림</h3>
         <div className="text-xs">
           상태: {settings.discord_enabled ? (
             <span className="text-green-700 font-medium">✅ 활성</span>
           ) : settings.discord_disabled_at ? (
-            <span className="text-red-700 font-medium">
+            <span className="text-brand-orange font-medium">
               ⚠️ 비활성화 ({settings.discord_consecutive_failures}회 연속 실패)
             </span>
           ) : (
@@ -191,7 +191,7 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
               }
             }}
             disabled={resetDiscord.isPending}
-            className="mt-2 px-3 py-1.5 text-xs font-medium border-2 border-black bg-white hover:bg-yellow-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="mt-2 px-3 py-1.5 text-xs font-medium border border-brand-blue/20 bg-white hover:bg-white/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {resetDiscord.isPending ? '재활성화 중...' : '재활성화'}
           </button>
@@ -199,7 +199,7 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
       </div>
 
       {/* 피드백 메시지 */}
-      {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
+      {error && <p className="text-xs text-brand-orange font-medium">{error}</p>}
       {feedback && <p className="text-xs text-green-600 font-medium">{feedback}</p>}
 
       {/* 푸터 버튼 */}
@@ -207,7 +207,7 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
         <button
           type="button"
           onClick={onClose}
-          className="border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-yellow-100 transition-colors w-full sm:w-auto"
+          className="border border-brand-blue/20 font-bold px-4 py-2 text-xs sm:text-sm hover:bg-white/60 transition-colors w-full sm:w-auto"
         >
           닫기
         </button>
@@ -215,7 +215,7 @@ function GitSettingsForm({ projectId, settings, onClose }: GitSettingsFormProps)
           type="button"
           onClick={handleSave}
           disabled={updateMutation.isPending}
-          className="bg-black text-white border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-yellow-400 hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] disabled:opacity-50 w-full sm:w-auto"
+          className="bg-brand-blue text-white border border-brand-blue/20 font-bold px-4 py-2 text-xs sm:text-sm hover:bg-brand-neon hover:text-brand-blue transition-colors shadow-sm disabled:opacity-50 w-full sm:w-auto"
         >
           {updateMutation.isPending ? '저장 중...' : '저장'}
         </button>
@@ -235,14 +235,14 @@ export function ProjectGitSettingsModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 sm:p-4"
+      className="fixed inset-0 bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-auto"
+        className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-black text-base sm:text-lg mb-4">Git 연동 설정</h2>
+        <h2 className="font-bold text-base text-brand-blue sm:text-lg mb-4">Git 연동 설정</h2>
 
         {isLoading || !settings ? (
           <div>
@@ -251,7 +251,7 @@ export function ProjectGitSettingsModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-yellow-100 transition-colors"
+                className="border border-brand-blue/20 font-bold px-4 py-2 text-xs sm:text-sm hover:bg-white/60 transition-colors"
               >
                 닫기
               </button>

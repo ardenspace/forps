@@ -73,19 +73,19 @@ export function CustomSelect({
         onClick={handleToggle}
         disabled={disabled}
         className={[
-          'border-2 border-black w-full flex items-center justify-between',
+          'border border-brand-blue/20 w-full flex items-center justify-between',
           disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white cursor-pointer',
         ].join(' ')}
       >
         <span
           className={[
             'px-3 py-2 text-sm font-medium flex-1 text-left',
-            !selectedLabel ? 'text-gray-400' : 'text-black',
+            !selectedLabel ? 'text-gray-400' : 'text-brand-blue',
           ].join(' ')}
         >
           {selectedLabel ?? placeholder}
         </span>
-        <span className="px-2 py-2 border-l-2 border-black flex items-center self-stretch">
+        <span className="px-2 py-2 border-l-2 border-brand-blue/20 flex items-center self-stretch">
           <svg
             className={`w-3 h-3 transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
             fill="none"
@@ -102,7 +102,7 @@ export function CustomSelect({
       {open && (
         <ul
           role="listbox"
-          className="absolute top-full left-0 right-0 z-50 mt-0 border-2 border-black border-t-0 bg-white shadow-[4px_4px_0px_0px_rgba(244,0,4,1)] max-h-48 overflow-y-auto"
+          className="absolute top-full left-0 right-0 z-50 mt-0 border border-brand-blue/20 border-t-0 bg-white shadow-sm max-h-48 overflow-y-auto"
         >
           {options.map((option) => (
             <li
@@ -113,8 +113,8 @@ export function CustomSelect({
               className={[
                 'px-3 py-2 text-sm cursor-pointer font-medium',
                 option.value === value
-                  ? 'bg-yellow-400 font-bold'
-                  : 'hover:bg-yellow-50',
+                  ? 'bg-brand-neon font-bold'
+                  : 'hover:bg-white/50',
               ].join(' ')}
             >
               {option.label}

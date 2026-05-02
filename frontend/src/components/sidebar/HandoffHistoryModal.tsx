@@ -20,14 +20,14 @@ export function HandoffHistoryModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 sm:p-4"
+      className="fixed inset-0 bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto"
+        className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-black text-base sm:text-lg mb-4">Handoff 이력</h2>
+        <h2 className="font-bold text-base text-brand-blue sm:text-lg mb-4">Handoff 이력</h2>
 
         {/* 브랜치 필터 */}
         <div className="mb-4">
@@ -36,7 +36,7 @@ export function HandoffHistoryModal({
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
             placeholder="main, feature/xxx ..."
-            className="border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(244,0,4,1)]"
+            className="border border-brand-blue/20 rounded-xl w-full px-3 py-2 text-sm focus:outline-none focus:shadow-sm"
           />
         </div>
 
@@ -50,7 +50,7 @@ export function HandoffHistoryModal({
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-xs sm:text-sm">
               <thead>
-                <tr className="border-b-2 border-black">
+                <tr className="border-b border-brand-blue/20">
                   <th className="text-left font-bold px-2 py-1.5">날짜</th>
                   <th className="text-left font-bold px-2 py-1.5">브랜치</th>
                   <th className="text-left font-bold px-2 py-1.5">작성자</th>
@@ -62,7 +62,7 @@ export function HandoffHistoryModal({
                 {handoffs.map((h) => (
                   <tr
                     key={h.id}
-                    className="border-b border-gray-200 hover:bg-yellow-50 transition-colors"
+                    className="border-b border-gray-200 hover:bg-white/50 transition-colors"
                   >
                     <td className="px-2 py-1.5 whitespace-nowrap">
                       {new Date(h.pushed_at).toLocaleString('ko-KR', {
@@ -89,7 +89,7 @@ export function HandoffHistoryModal({
           <button
             type="button"
             onClick={onClose}
-            className="border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-yellow-100 transition-colors"
+            className="border border-brand-blue/20 font-bold px-4 py-2 text-xs sm:text-sm hover:bg-white/60 transition-colors"
           >
             닫기
           </button>

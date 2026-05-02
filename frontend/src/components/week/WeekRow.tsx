@@ -14,19 +14,19 @@ export function WeekRow({ date, label, tasks, onTaskClick, isToday, isPast, isLa
   const dayOfWeek = date ? date.toLocaleDateString('ko-KR', { weekday: 'short' }) : '';
   const dayOfMonth = date ? date.getDate() : null;
 
-  const rowBg = isToday ? 'bg-yellow-400' : isPast ? 'bg-gray-50' : 'bg-white';
-  const borderBottom = isLast ? '' : 'border-b-2 border-black';
+  const rowBg = isToday ? 'bg-brand-neon/30' : isPast ? 'bg-black/5' : 'bg-white/50';
+  const borderBottom = isLast ? '' : 'border-b border-brand-blue/10';
 
   return (
     <div className={`flex items-stretch ${rowBg} ${borderBottom}`}>
       {/* Left label cell */}
-      <div className="w-14 sm:w-20 flex-shrink-0 flex flex-col items-center justify-center p-2 sm:p-3 border-r-2 border-black">
+      <div className="w-14 sm:w-20 flex-shrink-0 flex flex-col items-center justify-center p-2 sm:p-3 border-r border-brand-blue/10">
         {date ? (
           <>
-            <span className={`text-[10px] sm:text-xs font-bold uppercase ${isPast ? 'text-muted-foreground' : ''}`}>
+            <span className={`text-[10px] sm:text-xs font-bold uppercase ${isPast ? 'text-brand-blue/50' : 'text-brand-blue/80'}`}>
               {dayOfWeek}
             </span>
-            <span className={`text-xl sm:text-2xl font-black leading-none ${isPast ? 'text-muted-foreground' : ''}`}>
+            <span className={`text-xl sm:text-2xl font-black leading-none ${isPast ? 'text-brand-blue/50' : 'text-brand-blue'}`}>
               {dayOfMonth}
             </span>
           </>
@@ -41,9 +41,9 @@ export function WeekRow({ date, label, tasks, onTaskClick, isToday, isPast, isLa
           <div
             key={task.id}
             onClick={() => onTaskClick(task)}
-            className={`border-2 border-black shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] hover:shadow-[3px_3px_0px_0px_rgba(244,0,4,1)] hover:-translate-y-0.5 cursor-pointer px-3 py-1.5 transition-all ${isToday ? 'bg-yellow-200' : 'bg-white'}`}
+            className={`border border-white/60 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer px-3 py-1.5 transition-all ${isToday ? 'bg-white/80' : 'glass'}`}
           >
-            <p className="text-xs font-bold max-w-[120px] sm:max-w-[160px] truncate">{task.title}</p>
+            <p className="text-xs font-bold text-brand-blue max-w-[120px] sm:max-w-[160px] truncate">{task.title}</p>
             {task.assignee && (
               <p className="text-[11px] sm:text-xs text-muted-foreground truncate max-w-[120px] sm:max-w-[160px]">
                 {task.assignee.name}

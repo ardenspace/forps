@@ -55,11 +55,11 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
-      <div className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
+    <div className="fixed inset-0 bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+      <div className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="font-black text-base sm:text-lg">공유 링크 관리</h2>
+            <h2 className="font-bold text-base text-brand-blue sm:text-lg">공유 링크 관리</h2>
             <p className="text-xs sm:text-sm text-muted-foreground break-words">{projectName}</p>
           </div>
           <Button type="button" variant="ghost" onClick={onClose}>닫기</Button>
@@ -70,7 +70,7 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
             type="button"
             onClick={handleCreateLink}
             disabled={createShareLink.isPending}
-            className="border-2 border-black font-bold"
+            className="border border-brand-blue/20 font-bold"
           >
             {createShareLink.isPending ? '생성 중...' : '새 공유 링크 생성'}
           </Button>
@@ -88,7 +88,7 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
                 deleteShareLink.isPending;
 
               return (
-                <div key={link.id} className="border-2 border-black p-3 bg-yellow-50">
+                <div key={link.id} className="border border-brand-blue/20 p-3 bg-white/50">
                   <p className="text-xs text-muted-foreground mb-1">공유 URL</p>
                   <p className="text-sm font-mono break-all mb-2">{shareUrl}</p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
@@ -135,7 +135,7 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
                       variant="ghost"
                       onClick={() => handleDelete(link.id)}
                       disabled={isMutating}
-                      className="h-9 w-9 border-0 bg-transparent p-0 text-red-600 hover:bg-transparent hover:text-red-600"
+                      className="h-9 w-9 border-0 bg-transparent p-0 text-brand-orange hover:bg-transparent hover:text-brand-orange"
                       aria-label="공유 링크 삭제"
                     >
                       <Trash2 strokeWidth={2.8} />

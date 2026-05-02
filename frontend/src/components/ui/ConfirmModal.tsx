@@ -26,12 +26,12 @@ export function ConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4" onClick={onCancel}>
+    <div className="fixed inset-0 z-[70] bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center p-4" onClick={onCancel}>
       <div
-        className="w-full max-w-sm bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-4"
+        className="w-full max-w-sm bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 p-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="font-black text-base mb-2">{title}</h3>
+        <h3 className="font-bold text-base text-brand-blue mb-2">{title}</h3>
         {description && <p className="text-sm text-muted-foreground mb-4">{description}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onCancel} disabled={isConfirming}>

@@ -13,10 +13,10 @@ interface ErrorDetailProps {
 }
 
 const STATUS_STYLES: Record<ErrorGroupStatus, string> = {
-  open: 'bg-red-100 text-red-800 border-red-500',
-  resolved: 'bg-green-100 text-green-800 border-green-500',
-  ignored: 'bg-gray-100 text-gray-700 border-gray-500',
-  regressed: 'bg-orange-100 text-orange-800 border-orange-500',
+  open: 'bg-brand-orange/20 text-brand-coffee border-brand-orange/50',
+  resolved: 'bg-brand-neon/20 text-brand-coffee border-brand-neon/50',
+  ignored: 'bg-black/5 text-brand-blue border-brand-blue/20',
+  regressed: 'bg-brand-orange/40 text-brand-coffee border-brand-orange',
 };
 
 const ACTIONS_BY_STATUS: Record<ErrorGroupStatus, ErrorGroupAction[]> = {
@@ -48,9 +48,9 @@ export function ErrorDetail({
   }
   if (error || !data) {
     return (
-      <div className="border-2 border-black bg-white p-4 rounded">
-        <p className="text-sm text-red-700 font-bold">에러 그룹을 불러올 수 없습니다.</p>
-        <Button onClick={onBack} className="mt-2 border-2 border-black font-bold">
+      <div className="glass-panel p-6 rounded-2xl text-center">
+        <p className="text-sm text-brand-orange font-bold">에러 그룹을 불러올 수 없습니다.</p>
+        <Button onClick={onBack} variant="outline" className="mt-4 rounded-full border-brand-blue/30 text-brand-blue hover:bg-brand-sky/20 font-bold">
           ← 목록으로
         </Button>
       </div>
@@ -71,32 +71,32 @@ export function ErrorDetail({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Button onClick={onBack} className="border-2 border-black font-bold text-xs">
+      <div className="flex items-center gap-3">
+        <Button onClick={onBack} variant="outline" size="sm" className="rounded-full bg-white/50 border-white/60 text-brand-blue hover:bg-white/80 font-bold text-xs shadow-sm">
           ← 목록
         </Button>
         <span
-          className={`px-2 py-0.5 text-[10px] font-bold uppercase border-2 rounded ${
+          className={`px-2 py-0.5 text-[10px] font-bold uppercase border rounded-md ${
             STATUS_STYLES[group.status]
           }`}
         >
           {group.status}
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-brand-blue/70">
           누적 {group.event_count.toLocaleString()} 회
         </span>
       </div>
 
-      <header className="border-2 border-black bg-white p-3 sm:p-4 shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] rounded">
-        <h2 className="text-base sm:text-lg font-black break-words">
+      <header className="glass-panel p-5 sm:p-6 shadow-sm rounded-2xl">
+        <h2 className="text-base sm:text-lg font-bold break-words text-brand-blue">
           {group.exception_class}
         </h2>
         {group.exception_message_sample && (
-          <p className="mt-1 text-sm break-words text-muted-foreground">
+          <p className="mt-2 text-sm break-words text-brand-blue/80">
             {group.exception_message_sample}
           </p>
         )}
-        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-muted-foreground">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-brand-blue/60">
           <p>
             <span className="font-bold">최초:</span>{' '}
             {new Date(group.first_seen_at).toLocaleString()}
@@ -122,7 +122,7 @@ export function ErrorDetail({
               key={action}
               onClick={() => handleAction(action)}
               disabled={transitionMutation.isPending}
-              className="border-2 border-black font-bold text-xs sm:text-sm"
+              className="rounded-full bg-brand-neon text-brand-coffee border border-brand-neon/50 hover:brightness-110 font-bold text-xs sm:text-sm shadow-sm px-5"
             >
               {transitionMutation.isPending ? '처리 중...' : ACTION_LABEL[action]}
             </Button>
@@ -132,36 +132,36 @@ export function ErrorDetail({
 
       <GitContextPanel context={git_context} firstSeenSha={group.first_seen_version_sha} />
 
-      <section className="border-2 border-black bg-white p-3 sm:p-4 shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] rounded">
-        <h3 className="text-sm sm:text-base font-black mb-2">
+      <section className="glass-panel p-5 sm:p-6 shadow-sm rounded-2xl">
+        <h3 className="text-sm sm:text-base font-bold mb-4 text-brand-blue">
           최근 이벤트 ({recent_events.length})
         </h3>
         {recent_events.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">이벤트 없음</p>
+          <p className="text-xs text-brand-blue/60 italic">이벤트 없음</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {recent_events.map((evt) => (
               <li
                 key={evt.id}
-                className="border border-black/20 rounded p-2 bg-gray-50 text-xs space-y-1"
+                className="border border-white/60 rounded-xl p-4 glass shadow-sm text-xs space-y-2 text-brand-blue"
               >
                 <div className="flex items-center gap-2 flex-wrap">
                   <LogLevelBadge level={evt.level} />
                   <code className="text-[10px] font-mono">{evt.logger_name}</code>
-                  <span className="text-muted-foreground">·</span>
+                  <span className="text-brand-blue/40">·</span>
                   <code
-                    className="text-[10px] font-mono"
+                    className="text-[10px] font-mono bg-white/50 px-1 rounded"
                     title={evt.version_sha}
                   >
                     {evt.version_sha === 'unknown' ? 'unknown' : evt.version_sha.slice(0, 8)}
                   </code>
-                  <span className="text-muted-foreground ml-auto">
+                  <span className="text-brand-blue/60 ml-auto">
                     {new Date(evt.received_at).toLocaleString()}
                   </span>
                 </div>
-                <p className="break-words">{evt.message}</p>
+                <p className="break-words text-brand-coffee">{evt.message}</p>
                 {evt.exception_message && evt.exception_message !== evt.message && (
-                  <p className="text-muted-foreground italic break-words">
+                  <p className="text-brand-orange/80 italic break-words">
                     {evt.exception_message}
                   </p>
                 )}

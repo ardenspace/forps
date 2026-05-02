@@ -99,22 +99,22 @@ export function WeekView({ tasks, weekStart, onWeekChange, onTaskClick }: WeekVi
     <div>
       {/* Navigation bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+        <div className="flex items-center gap-1 overflow-x-auto p-1 bg-white/50 backdrop-blur-md rounded-full shadow-sm border border-white/60">
           <button
             onClick={handlePrevWeek}
-            className="border-2 border-black font-bold px-2.5 sm:px-3 py-1 text-xs sm:text-sm hover:bg-yellow-100 transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] bg-white whitespace-nowrap"
+            className="px-3 sm:px-4 py-1.5 text-[12px] sm:text-sm font-medium transition-all rounded-full text-brand-blue hover:bg-white/60 whitespace-nowrap"
           >
             ← 이전
           </button>
           <button
             onClick={handleThisWeek}
-            className="border-2 border-black font-bold px-2.5 sm:px-3 py-1 text-xs sm:text-sm bg-black text-white hover:bg-yellow-400 hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] whitespace-nowrap"
+            className="px-3 sm:px-4 py-1.5 text-[12px] sm:text-sm font-medium transition-all rounded-full bg-brand-blue text-white shadow-md whitespace-nowrap"
           >
             이번 주
           </button>
           <button
             onClick={handleNextWeek}
-            className="border-2 border-black font-bold px-2.5 sm:px-3 py-1 text-xs sm:text-sm hover:bg-yellow-100 transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] bg-white whitespace-nowrap"
+            className="px-3 sm:px-4 py-1.5 text-[12px] sm:text-sm font-medium transition-all rounded-full text-brand-blue hover:bg-white/60 whitespace-nowrap"
           >
             다음 →
           </button>
@@ -126,7 +126,7 @@ export function WeekView({ tasks, weekStart, onWeekChange, onTaskClick }: WeekVi
       </div>
 
       {/* Weekly rows grid */}
-      <div className="border-2 border-black shadow-[4px_4px_0px_0px_rgba(244,0,4,1)]">
+      <div className="glass-panel rounded-2xl overflow-hidden flex flex-col">
         {weekDates.map((date, i) => {
           const key = toLocalDateKey(date);
           const dayTasks = tasksByDate.get(key) || [];
@@ -150,7 +150,7 @@ export function WeekView({ tasks, weekStart, onWeekChange, onTaskClick }: WeekVi
 
       {/* No-due-date section */}
       {noDateTasks.length > 0 && (
-        <div className="mt-4 border-2 border-black shadow-[4px_4px_0px_0px_rgba(244,0,4,1)]">
+        <div className="mt-4 glass-panel rounded-2xl overflow-hidden flex flex-col">
           <WeekRow
             date={null}
             label="마감일 없음"

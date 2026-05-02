@@ -34,14 +34,14 @@ export function GitEventListModal({ projectId, open, onClose }: GitEventListModa
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 sm:p-4"
+      className="fixed inset-0 bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto"
+        className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 p-5 sm:p-7 w-full max-w-2xl max-h-[90vh] overflow-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-black text-base sm:text-lg mb-4">⚠️ Sync 실패 이벤트</h2>
+        <h2 className="font-bold text-base sm:text-lg mb-4 text-brand-blue">⚠️ Sync 실패 이벤트</h2>
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground py-4">불러오는 중...</p>
@@ -52,7 +52,7 @@ export function GitEventListModal({ projectId, open, onClose }: GitEventListModa
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs sm:text-sm">
-              <thead className="border-b-2 border-black">
+              <thead className="border-b border-brand-blue/20">
                 <tr className="font-bold">
                   <th className="text-left py-2 pr-2">시각</th>
                   <th className="text-left py-2 pr-2">브랜치</th>
@@ -75,10 +75,10 @@ export function GitEventListModal({ projectId, open, onClose }: GitEventListModa
           </div>
         )}
 
-        <div className="flex justify-end mt-4">
+        <div className="flex justify-end mt-6">
           <button
             type="button"
-            className="px-3 py-1.5 text-xs font-medium border-2 border-black hover:bg-yellow-50 transition-colors"
+            className="px-4 py-2 text-xs font-bold border border-brand-blue/20 bg-white/50 hover:bg-white/60 rounded-xl transition-colors text-brand-blue"
             onClick={onClose}
           >
             닫기
@@ -104,13 +104,13 @@ function EventRow({ event, onReprocess, isPending }: EventRowProps) {
       <td className="py-2 pr-2 whitespace-nowrap">{timeStr}</td>
       <td className="py-2 pr-2 break-all">{event.branch}</td>
       <td className="py-2 pr-2 font-mono">{event.head_commit_sha.slice(0, 7)}</td>
-      <td className="py-2 pr-2 text-red-700" title={event.error || ''}>{errorOneLine}</td>
+      <td className="py-2 pr-2 text-brand-orange" title={event.error || ''}>{errorOneLine}</td>
       <td className="py-2">
         <button
           type="button"
           disabled={isPending}
           onClick={() => onReprocess(event.id)}
-          className="px-2 py-1 text-[11px] font-medium border-2 border-black bg-white hover:bg-yellow-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-3 py-1.5 text-[11px] font-bold border border-brand-blue/20 bg-white/50 hover:bg-white/60 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-brand-blue"
         >
           {isPending ? '처리 중...' : '재처리'}
         </button>

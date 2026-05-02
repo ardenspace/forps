@@ -87,19 +87,19 @@ export function DatePicker({
         onClick={handleToggle}
         disabled={disabled}
         className={[
-          'border-2 border-black w-full flex items-center justify-between',
-          disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white cursor-pointer',
+          'w-full flex items-center justify-between rounded-xl border border-white/60 shadow-sm transition-all',
+          disabled ? 'opacity-50 bg-white/50 cursor-not-allowed' : 'glass hover:bg-white/60 cursor-pointer',
         ].join(' ')}
       >
         <span
           className={[
-            'px-3 py-2 text-sm font-medium flex-1 text-left',
-            !displayValue ? 'text-gray-400' : 'text-black',
+            'px-3 py-2 text-sm font-bold flex-1 text-left',
+            !displayValue ? 'text-brand-blue/50' : 'text-brand-blue',
           ].join(' ')}
         >
           {displayValue ?? placeholder}
         </span>
-        <span className="px-2 py-2 border-l-2 border-black flex items-center self-stretch">
+        <span className="px-3 py-2 border-l border-brand-blue/10 flex items-center text-brand-blue">
           {/* Calendar SVG icon */}
           <svg
             className="w-4 h-4"
@@ -119,7 +119,7 @@ export function DatePicker({
       {/* Calendar popup */}
       {open && (
         <div
-          className={`absolute top-full z-50 mt-0 border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] p-3 ${
+          className={`absolute top-full z-50 mt-1 glass-panel rounded-2xl p-4 ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >
@@ -129,33 +129,33 @@ export function DatePicker({
             onSelect={handleSelect}
             locale={ko}
             classNames={{
-              root: 'text-black',
+              root: 'text-brand-blue relative',
               months: 'flex flex-col',
-              month: 'space-y-2',
-              month_caption: 'flex justify-between items-center px-1 mb-2',
-              caption_label: 'font-black text-sm',
-              nav: 'flex items-center gap-1',
-              button_previous: 'border-2 border-black p-1 hover:bg-yellow-100 transition-colors bg-white cursor-pointer',
-              button_next: 'border-2 border-black p-1 hover:bg-yellow-100 transition-colors bg-white cursor-pointer',
-              chevron: 'w-3 h-3 fill-black',
+              month: 'space-y-4',
+              month_caption: 'flex justify-center items-center pt-1 relative',
+              caption_label: 'font-bold text-sm',
+              nav: 'flex items-center justify-between absolute top-0 w-full',
+              button_previous: 'p-1 hover:bg-brand-sky/20 transition-colors rounded-full cursor-pointer text-brand-blue',
+              button_next: 'p-1 hover:bg-brand-sky/20 transition-colors rounded-full cursor-pointer text-brand-blue',
+              chevron: 'w-4 h-4 fill-brand-blue',
               month_grid: 'w-full border-collapse',
-              weekdays: 'flex',
-              weekday: 'text-gray-500 font-bold text-xs w-8 text-center pb-1',
+              weekdays: 'flex mt-2',
+              weekday: 'text-brand-blue/60 font-bold text-[11px] w-8 text-center pb-2 uppercase',
               weeks: '',
               week: 'flex w-full mt-1',
               day: 'w-8 h-8 text-center text-sm p-0 relative',
-              day_button: 'w-8 h-8 font-medium hover:bg-yellow-100 transition-colors flex items-center justify-center text-xs cursor-pointer',
-              selected: 'bg-yellow-400 border-2 border-black font-black',
-              today: 'font-black underline',
-              outside: 'text-gray-400 opacity-50',
-              disabled: 'text-gray-400 opacity-30 cursor-not-allowed',
+              day_button: 'w-8 h-8 font-medium hover:bg-brand-sky/20 rounded-full transition-colors flex items-center justify-center text-xs cursor-pointer',
+              selected: 'bg-brand-blue text-white font-bold rounded-full hover:bg-brand-blue hover:text-white',
+              today: 'text-brand-orange font-bold',
+              outside: 'text-brand-blue/30 opacity-50',
+              disabled: 'text-brand-blue/30 opacity-30 cursor-not-allowed',
             }}
           />
           {value && (
             <button
               type="button"
               onClick={handleClear}
-              className="mt-2 w-full border-2 border-black text-xs font-bold py-1 hover:bg-yellow-100 transition-colors bg-white"
+              className="mt-4 w-full rounded-full border border-brand-blue/20 text-xs font-bold py-1.5 hover:bg-brand-sky/20 transition-colors text-brand-blue"
             >
               날짜 지우기
             </button>

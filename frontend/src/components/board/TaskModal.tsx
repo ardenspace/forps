@@ -42,7 +42,7 @@ const statusOptions: { value: TaskStatus; label: string }[] = [
 
 const metaLabelClass = 'text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block';
 const metaInputClass =
-  'border-2 border-black rounded-none w-full px-3 py-2 text-sm focus:outline-none focus:shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] disabled:bg-gray-100 disabled:cursor-not-allowed';
+  'border border-brand-blue/20 rounded-xl w-full px-3 py-2 text-sm focus:outline-none focus:shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed';
 
 export function TaskModal(props: TaskModalProps) {
   const { members, isOpen, onClose } = props;
@@ -203,12 +203,12 @@ export function TaskModal(props: TaskModalProps) {
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 sm:p-4"
+        className="fixed inset-0 bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4"
         onClick={handleBackdropClick}
       >
         <div
           ref={modalRef}
-          className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(244,0,4,1)] w-full max-w-3xl max-h-[92vh] overflow-y-auto"
+          className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 w-full max-w-3xl max-h-[92vh] overflow-y-auto"
         >
         <div className="p-4 sm:p-6 pt-4 sm:pt-6">
           {/* 2-column body */}
@@ -220,7 +220,7 @@ export function TaskModal(props: TaskModalProps) {
                 onChange={(e) => setTitle(e.target.value)}
                 disabled={!canEdit || isSaving}
                 placeholder="태스크 제목"
-                className="border-0 border-b-2 border-black rounded-none w-full px-0 py-2 font-black text-lg sm:text-xl focus:outline-none bg-transparent disabled:bg-transparent placeholder:text-gray-400"
+                className="border-0 border-b border-brand-blue/20 rounded-xl w-full px-0 py-2 font-black text-lg sm:text-xl focus:outline-none bg-transparent disabled:bg-transparent placeholder:text-gray-400"
                 autoFocus={isCreateMode}
               />
 
@@ -237,7 +237,7 @@ export function TaskModal(props: TaskModalProps) {
             </div>
 
             {/* Right: metadata */}
-            <div className="w-full md:w-56 flex-shrink-0 flex flex-col gap-4 border-t-2 md:border-t-0 md:border-l-2 border-black pt-4 md:pt-0 md:pl-6">
+            <div className="w-full md:w-56 flex-shrink-0 flex flex-col gap-4 border-t-2 md:border-t-0 md:border-l-2 border-brand-blue/20 pt-4 md:pt-0 md:pl-6">
               <div>
                 <label className={metaLabelClass}>상태</label>
                 <CustomSelect
@@ -271,7 +271,7 @@ export function TaskModal(props: TaskModalProps) {
 
               {!canEdit && (
                 <div className="mt-auto">
-                  <span className="text-xs bg-yellow-200 text-black border-2 border-black font-bold px-2 py-1 inline-block">
+                  <span className="text-xs bg-white/80 text-brand-blue border border-brand-blue/20 font-bold px-2 py-1 inline-block">
                     읽기 전용
                   </span>
                 </div>
@@ -280,14 +280,14 @@ export function TaskModal(props: TaskModalProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t-2 border-black">
+          <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t-2 border-brand-blue/20">
             <div>
               {canDelete && !isCreateMode && props.onDelete && task && (
                 <button
                   type="button"
                   disabled={isSaving}
                   onClick={() => setDeleteConfirmOpen(true)}
-                  className="bg-red-500 text-white border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-red-600 transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] disabled:opacity-50"
+                  className="bg-brand-orange text-white border border-brand-blue/20 font-bold px-4 py-2 text-xs sm:text-sm hover:bg-red-600 transition-colors shadow-sm disabled:opacity-50"
                 >
                   삭제
                 </button>
@@ -312,7 +312,7 @@ export function TaskModal(props: TaskModalProps) {
                     type="button"
                     onClick={handleClose}
                     disabled={isSaving}
-                    className="border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-yellow-100 transition-colors flex-1 sm:flex-none"
+                    className="border border-brand-blue/20 font-bold px-4 py-2 text-xs sm:text-sm hover:bg-white/60 transition-colors flex-1 sm:flex-none"
                   >
                     취소
                   </button>
@@ -320,7 +320,7 @@ export function TaskModal(props: TaskModalProps) {
                     type="button"
                     onClick={handleCreate}
                     disabled={isSaving || !title.trim()}
-                    className="bg-black text-white border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-yellow-400 hover:text-black transition-colors shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] disabled:opacity-50 flex-1 sm:flex-none"
+                    className="bg-brand-blue text-white border border-brand-blue/20 font-bold px-4 py-2 text-xs sm:text-sm hover:bg-brand-neon hover:text-brand-blue transition-colors shadow-sm disabled:opacity-50 flex-1 sm:flex-none"
                   >
                     생성
                   </button>
@@ -330,7 +330,7 @@ export function TaskModal(props: TaskModalProps) {
                   type="button"
                   onClick={handleClose}
                   disabled={isSaving}
-                  className="border-2 border-black font-bold px-4 py-2 text-xs sm:text-sm hover:bg-yellow-100 transition-colors w-full sm:w-auto"
+                  className="border border-brand-blue/20 font-bold px-4 py-2 text-xs sm:text-sm hover:bg-white/60 transition-colors w-full sm:w-auto"
                 >
                   닫기
                 </button>

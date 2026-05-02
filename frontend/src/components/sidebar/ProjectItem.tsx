@@ -52,10 +52,10 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
   return (
     <li className="group relative">
       <button
-        className={`w-full md:w-full whitespace-nowrap md:whitespace-normal text-left px-2 py-1.5 rounded text-xs sm:text-sm font-medium transition-all border-2 ${
+        className={`w-full md:w-full whitespace-nowrap md:whitespace-normal text-left px-3 py-2 rounded-xl text-xs sm:text-sm transition-all border ${
           isSelected
-            ? 'bg-yellow-400 border-black shadow-[2px_2px_0px_0px_rgba(244,0,4,1)] font-bold'
-            : 'border-transparent text-muted-foreground hover:bg-yellow-50 hover:border-black hover:text-foreground'
+            ? 'bg-brand-neon border-brand-neon/50 shadow-sm font-bold text-brand-coffee'
+            : 'border-transparent text-brand-blue/70 hover:bg-white/50 hover:border-white/60 hover:text-brand-blue hover:shadow-sm'
         }`}
         onClick={() => onSelect(project.id)}
       >
@@ -66,7 +66,7 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
         <div ref={menuRef}>
           <button
             type="button"
-            className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 text-xs font-bold hover:bg-yellow-100 rounded"
+            className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-xs font-bold hover:bg-white/60 rounded-lg text-brand-blue"
             onClick={(e) => {
               e.stopPropagation();
               setMenuOpen((prev) => !prev);
@@ -76,7 +76,7 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
               ···
               {failedCount > 0 && (
                 <span
-                  className="absolute -top-0.5 -right-1 w-1.5 h-1.5 bg-red-500 rounded-full"
+                  className="absolute -top-0.5 -right-1 w-1.5 h-1.5 bg-brand-orange rounded-full"
                   aria-label={`${failedCount}건 sync 실패`}
                 />
               )}
@@ -84,10 +84,10 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
           </button>
 
           {isMenuOpen && (
-            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] border-2 border-black bg-white shadow-[2px_2px_0px_0px_rgba(244,0,4,1)]">
+            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] glass-panel border border-white/60 rounded-xl overflow-hidden shadow-lg py-1">
               <button
                 type="button"
-                className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-yellow-50 transition-colors"
+                className="w-full text-left px-3 py-2 text-xs font-medium text-brand-blue hover:bg-brand-sky/20 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   setMenuOpen(false);
@@ -98,7 +98,7 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
               </button>
               <button
                 type="button"
-                className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-yellow-50 transition-colors"
+                className="w-full text-left px-3 py-2 text-xs font-medium text-brand-blue hover:bg-brand-sky/20 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   setMenuOpen(false);
@@ -109,7 +109,7 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
               </button>
               <button
                 type="button"
-                className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-yellow-50 transition-colors"
+                className="w-full text-left px-3 py-2 text-xs font-medium text-brand-blue hover:bg-brand-sky/20 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   setMenuOpen(false);
@@ -121,7 +121,7 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
               {failedCount > 0 && (
                 <button
                   type="button"
-                  className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-yellow-50 transition-colors text-yellow-800"
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-brand-orange hover:bg-brand-orange/10 transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
                     setMenuOpen(false);
@@ -133,7 +133,7 @@ export function ProjectItem({ project, isSelected, workspaceId, onSelect }: Proj
               )}
               <button
                 type="button"
-                className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-yellow-50 transition-colors text-red-600"
+                className="w-full text-left px-3 py-2 text-xs font-medium text-brand-orange hover:bg-brand-orange/10 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   setMenuOpen(false);
