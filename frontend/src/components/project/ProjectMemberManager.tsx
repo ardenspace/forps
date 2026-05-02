@@ -69,82 +69,84 @@ export function ProjectMemberManager({
 
   return (
     <div className="fixed inset-0 bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
-      <div className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-4 shrink-0">
           <h2 className="font-bold text-base text-brand-blue sm:text-lg">프로젝트 멤버 관리</h2>
           <Button type="button" variant="ghost" onClick={onClose}>닫기</Button>
         </div>
 
-        <form onSubmit={handleInvite} className="border border-brand-blue/20 p-3 mb-4 bg-white/50">
-          <p className="font-bold text-sm mb-2">멤버 초대</p>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="user@example.com"
-              required
-            />
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as WorkspaceRole)}
-              className="h-10 border border-brand-blue/20 px-2 w-full sm:w-auto"
-            >
-              {roleOptions.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-            <Button type="submit" disabled={addMember.isPending} className="w-full sm:w-auto">
-              {addMember.isPending ? '초대 중...' : '초대'}
-            </Button>
-          </div>
-          {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
-        </form>
-
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">로딩 중...</p>
-        ) : (
-          <div className="space-y-2">
-            {members?.map((member) => (
-              <div
-                key={member.id}
-                className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border border-brand-blue/20 p-3"
+        <div className="overflow-y-auto w-full flex-1 min-h-0 pr-2 -mr-2">
+          <form onSubmit={handleInvite} className="border border-brand-blue/20 p-3 mb-4 bg-white/50">
+            <p className="font-bold text-sm mb-2">멤버 초대</p>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="user@example.com"
+                required
+              />
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as WorkspaceRole)}
+                className="h-10 border border-brand-blue/20 px-2 w-full sm:w-auto"
               >
-                <div>
-                  <p className="font-medium text-sm">{member.user.name}</p>
-                  <p className="text-xs text-muted-foreground">{member.user.email}</p>
+                {roleOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+              <Button type="submit" disabled={addMember.isPending} className="w-full sm:w-auto">
+                {addMember.isPending ? '초대 중...' : '초대'}
+              </Button>
+            </div>
+            {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
+          </form>
+
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">로딩 중...</p>
+          ) : (
+            <div className="space-y-2">
+              {members?.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border border-brand-blue/20 p-3"
+                >
+                  <div>
+                    <p className="font-medium text-sm">{member.user.name}</p>
+                    <p className="text-xs text-muted-foreground">{member.user.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <select
+                      value={member.role}
+                      onChange={(e) => handleRoleChange(member.user_id, e.target.value as WorkspaceRole)}
+                      className="h-8 border border-brand-blue/20 px-2 text-xs flex-1 sm:flex-none"
+                      disabled={member.user_id === currentUserId || updateRole.isPending}
+                    >
+                      {roleOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleRemove(member.user_id, member.user.name)}
+                      disabled={member.user_id === currentUserId || removeMember.isPending}
+                      className="flex-1 sm:flex-none"
+                    >
+                      제거
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <select
-                    value={member.role}
-                    onChange={(e) => handleRoleChange(member.user_id, e.target.value as WorkspaceRole)}
-                    className="h-8 border border-brand-blue/20 px-2 text-xs flex-1 sm:flex-none"
-                    disabled={member.user_id === currentUserId || updateRole.isPending}
-                  >
-                    {roleOptions.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => handleRemove(member.user_id, member.user.name)}
-                    disabled={member.user_id === currentUserId || removeMember.isPending}
-                    className="flex-1 sm:flex-none"
-                  >
-                    제거
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {!members?.length && (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                프로젝트 멤버가 없습니다.
-              </p>
-            )}
-          </div>
-        )}
+              ))}
+              {!members?.length && (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  프로젝트 멤버가 없습니다.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

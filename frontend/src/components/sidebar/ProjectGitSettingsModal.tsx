@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   useGitSettings,
   useRegisterWebhook,
@@ -233,40 +234,43 @@ export function ProjectGitSettingsModal({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-auto"
+        className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-bold text-base text-brand-blue sm:text-lg mb-4">Git 연동 설정</h2>
+        <h2 className="font-bold text-base text-brand-blue sm:text-lg mb-4 shrink-0">Git 연동 설정</h2>
 
-        {isLoading || !settings ? (
-          <div>
-            <p className="text-sm text-muted-foreground py-4">불러오는 중...</p>
-            <div className="flex justify-end mt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="border border-brand-blue/20 font-bold px-4 py-2 text-xs sm:text-sm hover:bg-white/60 transition-colors"
-              >
-                닫기
-              </button>
+        <div className="overflow-y-auto w-full flex-1 min-h-0 pr-2 -mr-2">
+          {isLoading || !settings ? (
+            <div>
+              <p className="text-sm text-muted-foreground py-4">불러오는 중...</p>
+              <div className="flex justify-end mt-4">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="border border-brand-blue/20 font-bold px-4 py-2 text-xs sm:text-sm hover:bg-white/60 transition-colors"
+                >
+                  닫기
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          // key={projectId} — 같은 project 면 폼 state 유지, 다른 project 로 전환 시 remount
-          <GitSettingsForm
-            key={projectId}
-            projectId={projectId}
-            settings={settings}
-            onClose={onClose}
-          />
-        )}
+          ) : (
+            // key={projectId} — 같은 project 면 폼 state 유지, 다른 project 로 전환 시 remount
+            <GitSettingsForm
+              key={projectId}
+              projectId={projectId}
+              settings={settings}
+              onClose={onClose}
+            />
+          )}
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

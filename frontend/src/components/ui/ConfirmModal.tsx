@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 
 interface ConfirmModalProps {
@@ -25,7 +26,7 @@ export function ConfirmModal({
 }: ConfirmModalProps) {
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[70] bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center p-4" onClick={onCancel}>
       <div
         className="w-full max-w-sm bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 p-4"
@@ -42,6 +43,7 @@ export function ConfirmModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -56,8 +56,8 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
 
   return (
     <div className="fixed inset-0 bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
-      <div className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-4 shrink-0">
           <div>
             <h2 className="font-bold text-base text-brand-blue sm:text-lg">공유 링크 관리</h2>
             <p className="text-xs sm:text-sm text-muted-foreground break-words">{projectName}</p>
@@ -65,90 +65,92 @@ export function ShareLinkManager({ projectId, projectName, isOpen, onClose }: Sh
           <Button type="button" variant="ghost" onClick={onClose}>닫기</Button>
         </div>
 
-        <div className="mb-4">
-          <Button
-            type="button"
-            onClick={handleCreateLink}
-            disabled={createShareLink.isPending}
-            className="border border-brand-blue/20 font-bold"
-          >
-            {createShareLink.isPending ? '생성 중...' : '새 공유 링크 생성'}
-          </Button>
-        </div>
+        <div className="overflow-y-auto w-full flex-1 min-h-0 pr-2 -mr-2">
+          <div className="mb-4">
+            <Button
+              type="button"
+              onClick={handleCreateLink}
+              disabled={createShareLink.isPending}
+              className="border border-brand-blue/20 font-bold"
+            >
+              {createShareLink.isPending ? '생성 중...' : '새 공유 링크 생성'}
+            </Button>
+          </div>
 
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">로딩 중...</p>
-        ) : (
-          <div className="space-y-3">
-            {links?.map((link) => {
-              const shareUrl = `${baseUrl}/share/${link.token}`;
-              const isMutating =
-                deactivateShareLink.isPending ||
-                activateShareLink.isPending ||
-                deleteShareLink.isPending;
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">로딩 중...</p>
+          ) : (
+            <div className="space-y-3">
+              {links?.map((link) => {
+                const shareUrl = `${baseUrl}/share/${link.token}`;
+                const isMutating =
+                  deactivateShareLink.isPending ||
+                  activateShareLink.isPending ||
+                  deleteShareLink.isPending;
 
-              return (
-                <div key={link.id} className="border border-brand-blue/20 p-3 bg-white/50">
-                  <p className="text-xs text-muted-foreground mb-1">공유 URL</p>
-                  <p className="text-sm font-mono break-all mb-2">{shareUrl}</p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                    <span>{link.is_active ? '활성' : '비활성'}</span>
-                    <span>•</span>
-                    <span>만료: {new Date(link.expires_at).toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => copyLink(link)}
-                        disabled={isMutating}
-                      >
-                        복사
-                      </Button>
-                      {link.is_active ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDeactivate(link.id)}
-                          disabled={isMutating}
-                        >
-                          철회
-                        </Button>
-                      ) : (
+                return (
+                  <div key={link.id} className="border border-brand-blue/20 p-3 bg-white/50">
+                    <p className="text-xs text-muted-foreground mb-1">공유 URL</p>
+                    <p className="text-sm font-mono break-all mb-2">{shareUrl}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                      <span>{link.is_active ? '활성' : '비활성'}</span>
+                      <span>•</span>
+                      <span>만료: {new Date(link.expires_at).toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
-                          onClick={() => handleActivate(link.id)}
+                          onClick={() => copyLink(link)}
                           disabled={isMutating}
                         >
-                          재활성화
+                          복사
                         </Button>
-                      )}
+                        {link.is_active ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDeactivate(link.id)}
+                            disabled={isMutating}
+                          >
+                            철회
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleActivate(link.id)}
+                            disabled={isMutating}
+                          >
+                            재활성화
+                          </Button>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDelete(link.id)}
+                        disabled={isMutating}
+                        className="h-9 w-9 border-0 bg-transparent p-0 text-brand-orange hover:bg-transparent hover:text-brand-orange"
+                        aria-label="공유 링크 삭제"
+                      >
+                        <Trash2 strokeWidth={2.8} />
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => handleDelete(link.id)}
-                      disabled={isMutating}
-                      className="h-9 w-9 border-0 bg-transparent p-0 text-brand-orange hover:bg-transparent hover:text-brand-orange"
-                      aria-label="공유 링크 삭제"
-                    >
-                      <Trash2 strokeWidth={2.8} />
-                    </Button>
                   </div>
-                </div>
-              );
-            })}
-            {!links?.length && (
-              <p className="text-sm text-muted-foreground text-center py-6">생성된 공유 링크가 없습니다.</p>
-            )}
-          </div>
-        )}
+                );
+              })}
+              {!links?.length && (
+                <p className="text-sm text-muted-foreground text-center py-6">생성된 공유 링크가 없습니다.</p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

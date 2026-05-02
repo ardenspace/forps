@@ -1,4 +1,5 @@
 import { useFailedGitEvents, useReprocessEvent } from '@/hooks/useGithubSettings';
+import { createPortal } from 'react-dom';
 import type { GitEventSummary } from '@/types/git';
 
 interface GitEventListModalProps {
@@ -32,60 +33,63 @@ export function GitEventListModal({ projectId, open, onClose }: GitEventListModa
     }
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 bg-brand-coffee/20 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 p-5 sm:p-7 w-full max-w-2xl max-h-[90vh] overflow-auto"
+        className="bg-brand-cream rounded-3xl shadow-xl border border-brand-blue/10 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-5 sm:p-7"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-bold text-base sm:text-lg mb-4 text-brand-blue">⚠️ Sync 실패 이벤트</h2>
+        <h2 className="font-bold text-base sm:text-lg mb-4 text-brand-blue shrink-0">⚠️ Sync 실패 이벤트</h2>
 
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground py-4">불러오는 중...</p>
-        ) : !events || events.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">
-            실패한 sync 이벤트가 없습니다.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs sm:text-sm">
-              <thead className="border-b border-brand-blue/20">
-                <tr className="font-bold">
-                  <th className="text-left py-2 pr-2">시각</th>
-                  <th className="text-left py-2 pr-2">브랜치</th>
-                  <th className="text-left py-2 pr-2">commit</th>
-                  <th className="text-left py-2 pr-2">error</th>
-                  <th className="text-left py-2">동작</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.map((e) => (
-                  <EventRow
-                    key={e.id}
-                    event={e}
-                    onReprocess={handleReprocess}
-                    isPending={reprocess.isPending && reprocess.variables === e.id}
-                  />
-                ))}
-              </tbody>
-            </table>
+        <div className="overflow-y-auto w-full flex-1 min-h-0 pr-2 -mr-2">
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground py-4">불러오는 중...</p>
+          ) : !events || events.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">
+              실패한 sync 이벤트가 없습니다.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs sm:text-sm">
+                <thead className="border-b border-brand-blue/20">
+                  <tr className="font-bold">
+                    <th className="text-left py-2 pr-2">시각</th>
+                    <th className="text-left py-2 pr-2">브랜치</th>
+                    <th className="text-left py-2 pr-2">commit</th>
+                    <th className="text-left py-2 pr-2">error</th>
+                    <th className="text-left py-2">동작</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.map((e) => (
+                    <EventRow
+                      key={e.id}
+                      event={e}
+                      onReprocess={handleReprocess}
+                      isPending={reprocess.isPending && reprocess.variables === e.id}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="flex justify-end mt-6">
+            <button
+              type="button"
+              className="px-4 py-2 text-xs font-bold border border-brand-blue/20 bg-white/40 hover:bg-white/60 rounded-xl transition-colors text-brand-blue"
+              onClick={onClose}
+            >
+              닫기
+            </button>
           </div>
-        )}
-
-        <div className="flex justify-end mt-6">
-          <button
-            type="button"
-            className="px-4 py-2 text-xs font-bold border border-brand-blue/20 bg-white/50 hover:bg-white/60 rounded-xl transition-colors text-brand-blue"
-            onClick={onClose}
-          >
-            닫기
-          </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

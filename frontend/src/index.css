@@ -15,62 +15,62 @@
     /* Shadcn UI */
     --background: #F7F3E8;
     --foreground: #1A1AA7;
-    
+
     --card: rgba(255, 255, 255, 0.4);
     --card-foreground: #1A1AA7;
-    
+
     --popover: rgba(255, 255, 255, 0.8);
     --popover-foreground: #1A1AA7;
-    
+
     --primary: #1A1AA7;
     --primary-foreground: #ffffff;
-    
+
     --secondary: #B1D5F0;
     --secondary-foreground: #1A1AA7;
-    
+
     --muted: rgba(177, 213, 240, 0.4);
     --muted-foreground: #2B211C;
-    
+
     --accent: #E3F40C;
     --accent-foreground: #1A1AA7;
-    
+
     --destructive: #FFA142;
     --destructive-foreground: #ffffff;
-    
+
     --border: rgba(26, 26, 167, 0.15);
     --input: rgba(26, 26, 167, 0.15);
     --ring: #1A1AA7;
-    
+
     --radius: 1.25rem;
-    
+
     --font-sans: 'Space Grotesk', sans-serif;
   }
 
   .dark {
     --background: #2B211C;
     --foreground: #F7F3E8;
-    
+
     --card: rgba(26, 26, 167, 0.2);
     --card-foreground: #F7F3E8;
-    
+
     --popover: #2B211C;
     --popover-foreground: #F7F3E8;
-    
+
     --primary: #E3F40C;
     --primary-foreground: #1A1AA7;
-    
+
     --secondary: #1A1AA7;
     --secondary-foreground: #F7F3E8;
-    
+
     --muted: rgba(255, 255, 255, 0.1);
     --muted-foreground: #B1D5F0;
-    
+
     --accent: #FFA142;
     --accent-foreground: #2B211C;
-    
+
     --destructive: #ff4d4f;
     --destructive-foreground: #ffffff;
-    
+
     --border: rgba(255, 255, 255, 0.1);
     --input: rgba(255, 255, 255, 0.1);
     --ring: #E3F40C;
@@ -81,6 +81,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground font-sans;
   }
@@ -90,10 +91,43 @@
   .glass {
     @apply bg-white/40 backdrop-blur-md border border-white/40 shadow-sm;
   }
+
   .glass-dark {
     @apply bg-black/10 backdrop-blur-md border border-white/10 shadow-sm;
   }
+
   .glass-panel {
     @apply bg-brand-cream/60 backdrop-blur-xl border border-white/60 shadow-lg;
   }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 16px;
+  /* Default margin */
+}
+
+
+
+::-webkit-scrollbar-thumb {
+  background: rgba(26, 26, 167, 0.2);
+  /* brand-blue with opacity */
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(26, 26, 167, 0.4);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(26, 26, 167, 0.2) transparent;
 }
