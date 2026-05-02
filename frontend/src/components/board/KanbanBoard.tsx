@@ -62,7 +62,7 @@ export function KanbanBoard({ tasks, onTaskClick, onTaskStatusChange, isDragDisa
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex gap-3 md:gap-4 overflow-x-auto pb-3 md:pb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 pb-3 md:pb-4">
         {tasksByStatus.map((col) => (
           <KanbanColumn
             key={col.status}

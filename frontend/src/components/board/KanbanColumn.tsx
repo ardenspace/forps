@@ -25,7 +25,7 @@ export function KanbanColumn({ status, title, tasks, onTaskClick, isDragDisabled
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 min-w-[220px] sm:min-w-[250px] rounded-2xl border p-3 sm:p-4 backdrop-blur-sm shadow-sm transition-all duration-200 ${statusStyles[status]} ${
+      className={`w-full rounded-2xl border p-3 sm:p-4 backdrop-blur-sm shadow-sm transition-all duration-200 ${statusStyles[status]} ${
         isOver ? 'ring-2 ring-brand-neon bg-brand-neon/20 scale-[1.01]' : ''
       }`}
     >
