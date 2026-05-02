@@ -13,6 +13,7 @@
 """
 
 import logging
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -302,11 +303,34 @@ async def _apply_plan(
 
     from app.models.task import Task, TaskSource, TaskStatus
     from app.models.task_event import TaskEvent, TaskEventAction
+    from app.models.user import User
     from app.services.plan_parser_service import parse_plan
 
     parsed = parse_plan(plan_text)  # DuplicateExternalIdError 는 process_event 가 catch
 
     changes = PlanChanges()
+
+    # `@username` → user_id 매핑. parser 가 lowercase 가 아닌 핸들도 통과시킬 수 있어
+    # User.username (lowercase 만 허용) 과 매칭하려면 비교 시 lower 정규화.
+    handles = {
+        pt.assignee.lower() for pt in parsed.tasks if pt.assignee is not None
+    }
+    user_id_by_handle: dict[str, uuid.UUID] = {}
+    if handles:
+        user_rows = (await db.execute(
+            select(User.id, User.username).where(User.username.in_(handles))
+        )).all()
+        user_id_by_handle = {row.username: row.id for row in user_rows}
+
+    def _resolve_assignee(parsed_handle: str | None) -> uuid.UUID | None:
+        if parsed_handle is None:
+            return None
+        resolved = user_id_by_handle.get(parsed_handle.lower())
+        if resolved is None:
+            logger.info(
+                "plan sync: unknown @%s — leaving assignee unset", parsed_handle
+            )
+        return resolved
 
     rows = (await db.execute(
         select(Task).where(
@@ -319,6 +343,7 @@ async def _apply_plan(
     for parsed_task in parsed.tasks:
         existing_task = existing.get(parsed_task.external_id)
         new_status = TaskStatus.DONE if parsed_task.checked else TaskStatus.TODO
+        new_assignee_id = _resolve_assignee(parsed_task.assignee)
 
         if existing_task is None:
             t = Task(
@@ -327,6 +352,7 @@ async def _apply_plan(
                 source=TaskSource.SYNCED_FROM_PLAN,
                 external_id=parsed_task.external_id,
                 status=new_status,
+                assignee_id=new_assignee_id,
                 last_commit_sha=event.head_commit_sha,
             )
             db.add(t)
@@ -338,6 +364,7 @@ async def _apply_plan(
                     "external_id": parsed_task.external_id,
                     "title": parsed_task.title,
                     "checked": parsed_task.checked,
+                    "assignee": parsed_task.assignee,
                 },
             ))
             # NOTE: 신규 INSERT 는 changes 에 담지 않음 (YAGNI — sprint init noise 회피)
@@ -371,7 +398,22 @@ async def _apply_plan(
                     },
                 ))
                 changes.unchecked.append((parsed_task.external_id, parsed_task.title))
-            # else: 변경 없음 — last_commit_sha 도 안 바꿈
+            # else: status 변경 없음 — last_commit_sha 도 안 바꿈
+
+            # assignee 는 status 와 독립적으로 sync — PLAN.md 가 source of truth
+            if existing_task.assignee_id != new_assignee_id:
+                previous_assignee_id = existing_task.assignee_id
+                existing_task.assignee_id = new_assignee_id
+                db.add(TaskEvent(
+                    task_id=existing_task.id,
+                    action=TaskEventAction.ASSIGNED,
+                    changes={
+                        "previous_assignee_id": (
+                            str(previous_assignee_id) if previous_assignee_id else None
+                        ),
+                        "assignee": parsed_task.assignee,
+                    },
+                ))
 
     parsed_ids = {t.external_id for t in parsed.tasks}
     for ext_id, task in existing.items():

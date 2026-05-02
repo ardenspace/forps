@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/common/ProtectedRoute';
-import { LoginPage, RegisterPage, DashboardPage, SharePage } from '@/pages';
+import { LoginPage, RegisterPage, DashboardPage, SettingsPage, SharePage } from '@/pages';
 import { ROUTES } from '@/constants';
 
 function App() {
@@ -15,6 +15,7 @@ function App() {
         {/* Protected routes */}
         <Route element={<ProtectedRoute />}>
           <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+          <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
         </Route>
 
         {/* Redirect root to dashboard */}

@@ -15,8 +15,22 @@ from app.models.handoff import Handoff
 from app.models.project import Project
 from app.models.task import Task, TaskSource, TaskStatus
 from app.models.task_event import TaskEvent, TaskEventAction
+from app.models.user import User
 from app.models.workspace import Workspace
 from app.services.sync_service import process_event
+
+
+async def _seed_user(db: AsyncSession, *, username: str, email: str | None = None) -> User:
+    user = User(
+        email=email or f"{username}@example.com",
+        username=username,
+        name=username,
+        password_hash="x",
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 async def _seed_project(
@@ -1224,6 +1238,141 @@ async def test_push_summary_includes_handoff_missing_line(
     content, _ = sent[0]
     assert "⚠️ handoff 누락" in content
     assert "handoffs/main.md" in content
+
+
+async def test_apply_plan_resolves_assignee_on_insert(async_session: AsyncSession):
+    """`@username` 이 매칭되는 User 면 신규 Task.assignee_id 가 채워짐."""
+    proj = await _seed_project(async_session)
+    sejong = await _seed_user(async_session, username="sejong")
+    plan_text = (
+        "## 태스크\n\n"
+        "- [ ] [task-001] 백엔드 작업 — @sejong — `backend/app.py`\n"
+    )
+
+    async def fake_fetch_file(repo_url, pat, sha, path):  # noqa: ARG001
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}],
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+
+    task = (await async_session.execute(
+        select(Task).where(Task.external_id == "task-001")
+    )).scalar_one()
+    assert task.assignee_id == sejong.id
+
+
+async def test_apply_plan_unknown_assignee_leaves_unset(
+    async_session: AsyncSession, caplog: pytest.LogCaptureFixture,
+):
+    """매칭되는 User 가 없으면 assignee_id 는 None — 에러 아님, INFO 로그만."""
+    proj = await _seed_project(async_session)
+    plan_text = "## 태스크\n\n- [ ] [task-002] 미배정 — @ghost\n"
+
+    async def fake_fetch_file(repo_url, pat, sha, path):  # noqa: ARG001
+        return plan_text if path == "PLAN.md" else None
+
+    event = await _seed_event(
+        async_session, proj, commits=[{"modified": ["PLAN.md"]}],
+    )
+    await process_event(
+        async_session, event,
+        fetch_file=fake_fetch_file, fetch_compare=_noop_fetch_compare,
+    )
+
+    task = (await async_session.execute(
+        select(Task).where(Task.external_id == "task-002")
+    )).scalar_one()
+    assert task.assignee_id is None
+    assert any("unknown @ghost" in r.message for r in caplog.records)
+
+
+async def test_apply_plan_assignee_change_emits_event(async_session: AsyncSession):
+    """기존 task 의 assignee 가 PLAN 에서 바뀌면 update + ASSIGNED TaskEvent."""
+    proj = await _seed_project(async_session)
+    arden = await _seed_user(async_session, username="arden")
+    sejong = await _seed_user(async_session, username="sejong")
+
+    # 첫 sync — @arden
+    async def fetch_v1(repo_url, pat, sha, path):  # noqa: ARG001
+        return "## 태스크\n\n- [ ] [task-010] 작업 — @arden\n" if path == "PLAN.md" else None
+
+    event1 = await _seed_event(
+        async_session, proj, head_sha="b" * 40,
+        commits=[{"id": "b" * 40, "modified": ["PLAN.md"]}],
+    )
+    await process_event(
+        async_session, event1, fetch_file=fetch_v1, fetch_compare=_noop_fetch_compare,
+    )
+    task = (await async_session.execute(
+        select(Task).where(Task.external_id == "task-010")
+    )).scalar_one()
+    assert task.assignee_id == arden.id
+
+    # 두 번째 sync — @sejong 으로 변경
+    async def fetch_v2(repo_url, pat, sha, path):  # noqa: ARG001
+        return "## 태스크\n\n- [ ] [task-010] 작업 — @sejong\n" if path == "PLAN.md" else None
+
+    event2 = await _seed_event(
+        async_session, proj, head_sha="c" * 40,
+        commits=[{"id": "c" * 40, "modified": ["PLAN.md"]}],
+    )
+    await process_event(
+        async_session, event2, fetch_file=fetch_v2, fetch_compare=_noop_fetch_compare,
+    )
+
+    await async_session.refresh(task)
+    assert task.assignee_id == sejong.id
+
+    events = (await async_session.execute(
+        select(TaskEvent).where(
+            TaskEvent.task_id == task.id, TaskEvent.action == TaskEventAction.ASSIGNED,
+        )
+    )).scalars().all()
+    assert len(events) == 1
+    assert events[0].changes == {
+        "previous_assignee_id": str(arden.id),
+        "assignee": "sejong",
+    }
+
+
+async def test_apply_plan_assignee_dropped_clears(async_session: AsyncSession):
+    """PLAN 에서 `@username` 이 빠지면 assignee_id 는 NULL 로 clear."""
+    proj = await _seed_project(async_session)
+    arden = await _seed_user(async_session, username="arden")
+
+    async def fetch_v1(repo_url, pat, sha, path):  # noqa: ARG001
+        return "## 태스크\n\n- [ ] [task-020] 작업 — @arden\n" if path == "PLAN.md" else None
+
+    event1 = await _seed_event(
+        async_session, proj, head_sha="d" * 40,
+        commits=[{"id": "d" * 40, "modified": ["PLAN.md"]}],
+    )
+    await process_event(
+        async_session, event1, fetch_file=fetch_v1, fetch_compare=_noop_fetch_compare,
+    )
+    task = (await async_session.execute(
+        select(Task).where(Task.external_id == "task-020")
+    )).scalar_one()
+    assert task.assignee_id == arden.id
+
+    async def fetch_v2(repo_url, pat, sha, path):  # noqa: ARG001
+        return "## 태스크\n\n- [ ] [task-020] 작업\n" if path == "PLAN.md" else None
+
+    event2 = await _seed_event(
+        async_session, proj, head_sha="e" * 40,
+        commits=[{"id": "e" * 40, "modified": ["PLAN.md"]}],
+    )
+    await process_event(
+        async_session, event2, fetch_file=fetch_v2, fetch_compare=_noop_fetch_compare,
+    )
+
+    await async_session.refresh(task)
+    assert task.assignee_id is None
 
 
 async def test_push_summary_skipped_when_no_changes(

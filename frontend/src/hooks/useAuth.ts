@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { ROUTES } from '@/constants';
-import type { LoginRequest, RegisterRequest } from '@/types';
+import type { LoginRequest, RegisterRequest, UserUpdateRequest } from '@/types';
 
 export function useAuth() {
   const navigate = useNavigate();
@@ -37,6 +37,13 @@ export function useAuth() {
     select: (response) => response.data,
   });
 
+  const updateMeMutation = useMutation({
+    mutationFn: (data: UserUpdateRequest) => api.auth.updateMe(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user', 'me'] });
+    },
+  });
+
   const logout = async () => {
     try {
       await api.auth.logout();
@@ -55,6 +62,8 @@ export function useAuth() {
     error: loginMutation.error || registerMutation.error,
     login: loginMutation.mutate,
     register: registerMutation.mutate,
+    updateMe: updateMeMutation.mutateAsync,
+    isUpdatingMe: updateMeMutation.isPending,
     logout,
   };
 }

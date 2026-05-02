@@ -4,6 +4,7 @@ import type {
   LoginRequest,
   RegisterRequest,
   User,
+  UserUpdateRequest,
   Task,
   TaskCreate,
   TaskUpdate,
@@ -66,6 +67,8 @@ export const api = {
     login: (data: LoginRequest) =>
       apiClient.post<AuthResponse>('/auth/login', data),
     me: () => apiClient.get<User>('/auth/me'),
+    updateMe: (data: UserUpdateRequest) =>
+      apiClient.patch<User>('/auth/me', data),
     logout: () => apiClient.post('/auth/logout'),
   },
 

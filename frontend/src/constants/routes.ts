@@ -8,4 +8,5 @@ export const ROUTES = {
   PROJECTS: '/projects',
   PROJECT_DETAIL: '/projects/:projectId',
   SHARE: '/share/:token',
+  SETTINGS: '/settings',
 } as const;

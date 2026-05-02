@@ -12,6 +12,8 @@ class User(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    # `@username` 멘션 매핑용 — PLAN.md sync 가 ParsedTask.assignee → User.username 으로 lookup
+    username: Mapped[str | None] = mapped_column(String, unique=True, index=True, nullable=True)
     name: Mapped[str]
     password_hash: Mapped[str]
 
