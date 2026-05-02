@@ -8,7 +8,22 @@ import base64
 import httpx
 import pytest
 
-from app.services.git_repo_service import fetch_file
+from app.services.git_repo_service import auth_headers, fetch_file
+
+
+def test_auth_headers_includes_user_agent():
+    """GitHub API 는 모든 요청에 User-Agent 필수 — 누락 시 403."""
+    h = auth_headers("ghp_dummy")
+    assert "User-Agent" in h
+    assert h["User-Agent"]  # 비어있지 않음
+    assert h["Authorization"] == "token ghp_dummy"
+    assert h["Accept"] == "application/vnd.github.v3+json"
+
+
+def test_auth_headers_user_agent_present_without_pat():
+    h = auth_headers(None)
+    assert "User-Agent" in h
+    assert "Authorization" not in h
 
 
 _REPO = "https://github.com/ardenspace/app-chak"
