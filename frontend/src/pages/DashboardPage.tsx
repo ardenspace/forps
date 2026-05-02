@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { ROUTES } from '@/constants';
 import { useWorkspaces } from '@/hooks/useWorkspaces';
 import { useMyProjects, useProjectMembers, useUpdateProject } from '@/hooks/useProjects';
 import { useTasks, useDeleteTask, useUpdateTask, useWeekTasks } from '@/hooks/useTasks';
@@ -383,7 +385,18 @@ export function DashboardPage() {
               </button>
               <span className="text-sm font-medium text-brand-blue/80 truncate max-w-[110px] sm:max-w-none">
                 {user?.name}
+                {user?.username && (
+                  <span className="ml-1 text-xs font-mono text-brand-blue/60">
+                    @{user.username}
+                  </span>
+                )}
               </span>
+              <Link
+                to={ROUTES.SETTINGS}
+                className="rounded-full bg-white/40 hover:bg-brand-blue hover:text-white text-brand-blue font-medium px-4 py-1.5 transition-all shadow-sm border border-white/50 text-sm"
+              >
+                설정
+              </Link>
               <Button
                 variant="ghost"
                 size="sm"

@@ -5,7 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
-from app.schemas.auth import AuthResponse, RegisterRequest, LoginRequest, TokenResponse, UserResponse
+from app.schemas.auth import (
+    AuthResponse,
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserResponse,
+    UserUpdateRequest,
+)
 
 
 async def register(db: AsyncSession, data: RegisterRequest) -> AuthResponse:
@@ -52,6 +59,27 @@ async def register(db: AsyncSession, data: RegisterRequest) -> AuthResponse:
         token=TokenResponse(access_token=token),
         user=UserResponse.model_validate(user),
     )
+
+
+async def update_me(db: AsyncSession, user: User, data: UserUpdateRequest) -> User:
+    """본인 프로필 부분 수정. username 충돌 시 409.
+
+    Pydantic pattern 검증으로 형식은 미리 차단됨 — 여기서는 unique 충돌만 추가 처리.
+    """
+    if data.username is not None and data.username != user.username:
+        existing = await db.execute(
+            select(User).where(User.username == data.username, User.id != user.id)
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username already taken",
+            )
+        user.username = data.username
+
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 async def login(db: AsyncSession, data: LoginRequest) -> AuthResponse:
