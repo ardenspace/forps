@@ -1,22 +1,45 @@
-version: '3.8'
+# forps stack — postgres + backend (frontend 는 dev 에선 vite, 배포 시 별도 host)
+# 운영 환경 변수는 backend/.env 가 그대로 컨테이너에 주입됨 (env_file).
+# DATABASE_URL 만 compose 가 internal 네트워크용으로 override.
+# 호스트 노출은 5433 (app-chak 의 5432 보호) / 8081 — 기존 dev 포트와 동일.
 
 services:
   postgres:
     image: postgres:16-alpine
     container_name: forps-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: forps
       POSTGRES_PASSWORD: forps123
       POSTGRES_DB: forps
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - forps_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U forps"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "pg_isready -U forps -d forps"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: forps-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - backend/.env
+    environment:
+      # 컨테이너 내부에서는 service name 으로 postgres 접근 — .env 의 5433/localhost 를 override.
+      # ssl=disable 는 asyncpg 가 internal network 호스트에 SSL 시도하다 실패하는 것 방지.
+      DATABASE_URL: postgresql+asyncpg://forps:forps123@postgres:5432/forps?ssl=disable
+    ports:
+      - "8081:8081"
 
 volumes:
-  postgres_data:
+  forps_pgdata:
+    name: forps_pgdata

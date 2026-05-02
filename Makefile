@@ -1,7 +1,11 @@
 # forps dev 환경 자동화
 # app-chak (운영 서버, 8000/5432) 는 절대 안 건드림 — 모든 target 은 forps 자원만 대상.
+#
+# 두 가지 실행 모드:
+#  (1) always-on / production-ish:  `make up`           (docker compose: postgres + backend)
+#  (2) dev iteration (hot reload):  `make db-up` + `make backend`  (compose postgres + venv uvicorn)
+# 한 시점에 backend 는 둘 중 하나만 — 8081 포트 충돌.
 
-PG_CONTAINER := forps-postgres
 PG_USER := forps
 PG_PASSWORD := forps123
 PG_DB := forps
@@ -17,28 +21,37 @@ VENV_ALEMBIC := $(VENV)/bin/alembic
 VENV_PYTEST := $(VENV)/bin/pytest
 VENV_UVICORN := $(VENV)/bin/uvicorn
 
-.PHONY: help setup env venv backend frontend db-up db-down stop clean migrate test test-backend test-frontend
+COMPOSE := docker compose
+
+.PHONY: help setup env venv up down restart logs ps backend frontend db-up db-down stop clean migrate test test-backend test-frontend
 
 help:
 	@echo "forps dev targets:"
 	@echo "  make setup        # 첫 setup: venv + deps + .env + .env.local + db-up + migrate"
-	@echo "  make backend      # uvicorn $(BACKEND_PORT) (auto reload)"
-	@echo "  make frontend     # vite (5173 -> backend $(BACKEND_PORT))"
-	@echo "  make db-up        # forps-postgres $(PG_PORT) (app-chak 안 건드림)"
-	@echo "  make db-down      # forps-postgres 만 stop"
-	@echo "  make migrate      # alembic upgrade head"
-	@echo "  make test         # backend pytest + frontend build/lint"
-	@echo "  make clean        # forps-postgres 컨테이너 삭제"
 	@echo ""
-	@echo "포트 override:"
-	@echo "  make backend BACKEND_PORT=8000"
-	@echo "  make db-up PG_PORT=5432"
+	@echo "Always-on (compose):"
+	@echo "  make up           # postgres + backend 컨테이너 기동 (alembic 자동 적용)"
+	@echo "  make down         # 컨테이너 stop+remove (volume 보존)"
+	@echo "  make restart      # backend 만 rebuild + 재기동"
+	@echo "  make logs         # backend 로그 follow"
+	@echo "  make ps           # compose 서비스 상태"
+	@echo ""
+	@echo "Dev iteration:"
+	@echo "  make db-up        # postgres 컨테이너만 기동 ($(PG_PORT))"
+	@echo "  make db-down      # postgres stop"
+	@echo "  make backend      # venv uvicorn --reload ($(BACKEND_PORT)) — db-up 선행 필요"
+	@echo "  make frontend     # vite (5173 -> backend $(BACKEND_PORT))"
+	@echo ""
+	@echo "Misc:"
+	@echo "  make migrate      # alembic upgrade head (host venv 기준)"
+	@echo "  make test         # backend pytest + frontend build/lint"
+	@echo "  make clean        # 컨테이너 + volume 삭제 (데이터 날아감)"
 
 # 첫 setup — 한 번만
 setup: env venv db-up migrate
 	cd frontend && bun install
 	@echo ""
-	@echo "✓ setup 완료. 두 터미널에서 'make backend' / 'make frontend' 로 실행."
+	@echo "✓ setup 완료. 'make up' (always-on) 또는 'make backend'+'make frontend' (dev)."
 
 env:
 	@if [ ! -f backend/.env ]; then \
@@ -67,6 +80,26 @@ venv:
 	@$(VENV_PIP) install --quiet -r backend/requirements-dev.txt
 	@echo "✓ backend deps 설치"
 
+# Always-on stack
+up:
+	$(COMPOSE) up -d --build
+	@echo "✓ stack up — http://localhost:$(BACKEND_PORT)"
+
+down:
+	$(COMPOSE) down
+	@echo "✓ stack down (volume 보존)"
+
+restart:
+	$(COMPOSE) up -d --build backend
+	@echo "✓ backend 재빌드/재기동"
+
+logs:
+	$(COMPOSE) logs -f --tail=100 backend
+
+ps:
+	$(COMPOSE) ps
+
+# Dev iteration (host venv 사용)
 backend:
 	$(VENV_UVICORN) --app-dir backend app.main:app --reload --port $(BACKEND_PORT)
 
@@ -74,43 +107,19 @@ frontend:
 	cd frontend && bun run dev
 
 db-up:
-	@if docker ps --format '{{.Names}}' | grep -q '^$(PG_CONTAINER)$$'; then \
-		echo "ℹ $(PG_CONTAINER) 이미 실행 중"; \
-	elif docker ps -a --format '{{.Names}}' | grep -q '^$(PG_CONTAINER)$$'; then \
-		docker start $(PG_CONTAINER) >/dev/null; \
-		echo "✓ $(PG_CONTAINER) start"; \
-	else \
-		docker run -d --name $(PG_CONTAINER) \
-			-e POSTGRES_USER=$(PG_USER) \
-			-e POSTGRES_PASSWORD=$(PG_PASSWORD) \
-			-e POSTGRES_DB=$(PG_DB) \
-			-p $(PG_PORT):5432 \
-			postgres:16-alpine >/dev/null; \
-		echo "✓ $(PG_CONTAINER) created on port $(PG_PORT)"; \
-	fi
-	@for i in 1 2 3 4 5 6 7 8 9 10; do \
-		docker exec $(PG_CONTAINER) pg_isready -U $(PG_USER) >/dev/null 2>&1 && echo "✓ $(PG_CONTAINER) ready" && exit 0; \
-		sleep 1; \
-	done; \
-	echo "✗ $(PG_CONTAINER) 가 10초 안에 ready 안 됨" && exit 1
+	$(COMPOSE) up -d postgres
+	@echo "✓ postgres ready ($(PG_PORT))"
 
 db-down:
-	@if docker ps --format '{{.Names}}' | grep -q '^$(PG_CONTAINER)$$'; then \
-		docker stop $(PG_CONTAINER) >/dev/null; \
-		echo "✓ $(PG_CONTAINER) stopped"; \
-	else \
-		echo "ℹ $(PG_CONTAINER) 가 실행 중 아님"; \
-	fi
+	$(COMPOSE) stop postgres
+	@echo "✓ postgres stopped"
 
-stop: db-down
-	@echo "ℹ uvicorn / vite 는 ctrl-c 로 직접 종료"
+stop: down
+	@echo "ℹ frontend(vite) / dev backend 는 ctrl-c 로 직접 종료"
 
-clean: db-down
-	@if docker ps -a --format '{{.Names}}' | grep -q '^$(PG_CONTAINER)$$'; then \
-		docker rm $(PG_CONTAINER) >/dev/null; \
-		echo "✓ $(PG_CONTAINER) 컨테이너 삭제"; \
-	fi
-	@echo "ℹ volume 도 삭제하려면 'docker volume prune'"
+clean:
+	$(COMPOSE) down -v
+	@echo "✓ 컨테이너 + volume 삭제됨 (데이터 날아감 — 백업 확인했는지 ?)"
 
 migrate:
 	cd backend && ../$(VENV_ALEMBIC) upgrade head

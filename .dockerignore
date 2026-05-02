@@ -1,0 +1,20 @@
+# 빌드 컨텍스트에서 제외 — backend/ 만 COPY 되더라도 보호 차원에서 root 에 위치
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+backend/venv
+backend/.venv
+backend/.env
+backend/.env.local
+backend/tests
+frontend
+node_modules
+.git
+.github
+.vscode
+.idea
+*.log
+docs
