@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth';
-import { ROUTES } from '@/constants';
+import { ROUTES, SITE_NAME } from '@/constants';
 import { USERNAME_PATTERN } from '@/types';
 
 type Status =
@@ -53,7 +53,7 @@ export function SettingsPage() {
       <div className="bg-white/60 backdrop-blur-xl rounded-3xl shadow-xl border border-brand-blue/10 p-6 sm:p-10 w-full max-w-md mx-auto">
         <div className="mb-6 sm:mb-8 text-center">
           <span className="font-bold text-3xl sm:text-4xl text-brand-blue border-b-4 border-brand-orange pb-1">
-            forps
+            {SITE_NAME}
           </span>
         </div>
         <h1 className="font-bold text-xl sm:text-2xl mb-2 text-brand-blue">설정</h1>

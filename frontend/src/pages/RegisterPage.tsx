@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { ROUTES } from '@/constants';
+import { ROUTES, SITE_NAME } from '@/constants';
 
 export function RegisterPage() {
   const { register, isLoading, error } = useAuth();
@@ -27,7 +27,7 @@ export function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-brand-cream p-4 sm:p-6 md:p-8">
       <div className="bg-white/60 backdrop-blur-xl rounded-3xl shadow-xl border border-brand-blue/10 p-6 sm:p-10 w-full max-w-md mx-auto">
         <div className="mb-6 sm:mb-8 text-center">
-          <span className="font-bold text-3xl sm:text-4xl text-brand-blue border-b-4 border-brand-orange pb-1">forps</span>
+          <span className="font-bold text-3xl sm:text-4xl text-brand-blue border-b-4 border-brand-orange pb-1">{SITE_NAME}</span>
         </div>
         <h1 className="font-bold text-xl sm:text-2xl mb-2 text-brand-blue">회원가입</h1>
         <p className="text-sm text-brand-blue/60 mb-6 sm:mb-8">새 계정을 만들어 시작하세요</p>

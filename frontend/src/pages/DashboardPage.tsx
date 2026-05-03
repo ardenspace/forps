@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { ROUTES } from '@/constants';
+import { ROUTES, SITE_NAME } from '@/constants';
 import { useWorkspaces } from '@/hooks/useWorkspaces';
 import { useMyProjects, useProjectMembers, useUpdateProject } from '@/hooks/useProjects';
 import { useTasks, useDeleteTask, useUpdateTask, useWeekTasks } from '@/hooks/useTasks';
@@ -331,7 +331,7 @@ export function DashboardPage() {
         <div className="px-4 py-3 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-brand-blue">forps</h1>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-brand-blue">{SITE_NAME}</h1>
               <div className="flex w-full sm:w-auto rounded-full p-1 bg-white/50 backdrop-blur-md border border-white/60 shadow-sm gap-1">
                 <button
                   className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 text-[12px] sm:text-sm font-medium transition-all rounded-full ${
